@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "768270916552",
+    "project_id": "taskai-b041f",
+    "storage_bucket": "taskai-b041f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:768270916552:android:2a83a3899dac8c044afefd",
+        "android_client_info": {
+          "package_name": "com.example.taskai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEouQ3tlx1NB_KK_0MwbHv9kn-23D0FzQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
