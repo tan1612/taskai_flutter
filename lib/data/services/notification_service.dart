@@ -34,6 +34,9 @@ class NotificationService {
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
+      defaultPresentAlert: true,
+      defaultPresentBadge: true,
+      defaultPresentSound: true,
     );
 
     await _plugin.initialize(
@@ -41,6 +44,9 @@ class NotificationService {
         android: android,
         iOS: ios,
       ),
+      onDidReceiveNotificationResponse: (response) {
+        debugPrint('Notification tapped: ${response.payload}');
+      },
     );
 
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
@@ -52,7 +58,7 @@ class NotificationService {
       _channelId,
       _channelName,
       description: _channelDescription,
-      importance: Importance.high,
+      importance: Importance.max,
     );
 
     await androidPlugin?.createNotificationChannel(channel);
@@ -61,11 +67,13 @@ class NotificationService {
       final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin>();
 
-      await iosPlugin?.requestPermissions(
+      final granted = await iosPlugin?.requestPermissions(
         alert: true,
         badge: true,
         sound: true,
       );
+
+      debugPrint('iOS notification permission granted: $granted');
     }
 
     _initialized = true;
@@ -77,9 +85,11 @@ class NotificationService {
         _channelId,
         _channelName,
         channelDescription: _channelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
+        importance: Importance.max,
+        priority: Priority.max,
         ticker: 'TaskAI',
+        playSound: true,
+        enableVibration: true,
       ),
       iOS: DarwinNotificationDetails(
         presentAlert: true,
@@ -87,8 +97,13 @@ class NotificationService {
         presentSound: true,
         presentBanner: true,
         presentList: true,
+        interruptionLevel: InterruptionLevel.active,
       ),
     );
+  }
+
+  int _safeNotificationId(String value) {
+    return value.hashCode & 0x7fffffff;
   }
 
   Future<void> showTestNotification() async {
@@ -99,9 +114,10 @@ class NotificationService {
       'TaskAI thông báo thử',
       'Nếu bạn thấy thông báo này thì notification đã hoạt động.',
       _notificationDetails,
+      payload: 'test',
     );
 
-    print('Đã gọi showTestNotification.');
+    debugPrint('Đã gọi showTestNotification.');
   }
 
   Future<void> scheduleTaskReminder(TaskModel task) async {
@@ -120,7 +136,7 @@ class NotificationService {
     final reminderMinutes = task.reminderMinutes;
 
     if (reminderMinutes == 0) {
-      print('Task "${task.title}" không bật nhắc deadline.');
+      debugPrint('Task "${task.title}" không bật nhắc deadline.');
       return;
     }
 
@@ -134,24 +150,25 @@ class NotificationService {
     );
 
     if (scheduledTime.isBefore(DateTime.now())) {
-      print(
+      debugPrint(
         'Không đặt notification cho "${task.title}" vì thời gian nhắc đã qua.',
       );
       return;
     }
 
     await _plugin.zonedSchedule(
-      task.id.hashCode,
+      _safeNotificationId(task.id),
       'TaskAI nhắc deadline',
       'Còn $reminderMinutes phút đến deadline: ${task.title}',
       tz.TZDateTime.from(scheduledTime, tz.local),
       _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
+      payload: task.id,
     );
 
-    print(
+    debugPrint(
       'Đã đặt notification deadline cho "${task.title}" trước $reminderMinutes phút.',
     );
   }
@@ -160,7 +177,7 @@ class NotificationService {
     final reminderMinutes = task.reminderMinutes;
 
     if (reminderMinutes == 0) {
-      print('Task "${task.title}" không bật nhắc di chuyển.');
+      debugPrint('Task "${task.title}" không bật nhắc di chuyển.');
       return;
     }
 
@@ -173,12 +190,12 @@ class NotificationService {
     final notifyTime = task.departureNotificationTime;
 
     if (departureTime == null || notifyTime == null) {
-      print('Không đặt notification cho "${task.title}" vì thiếu giờ bắt đầu.');
+      debugPrint('Không đặt notification cho "${task.title}" vì thiếu giờ bắt đầu.');
       return;
     }
 
     if (notifyTime.isBefore(DateTime.now())) {
-      print(
+      debugPrint(
         'Không đặt notification cho "${task.title}" vì thời gian nhắc đã qua.',
       );
       return;
@@ -187,19 +204,20 @@ class NotificationService {
     final departureLabel = _formatTime(departureTime);
 
     await _plugin.zonedSchedule(
-      task.id.hashCode,
+      _safeNotificationId(task.id),
       'TaskAI nhắc di chuyển',
       'Bạn nên đi lúc $departureLabel. '
           'Từ ${task.effectiveOrigin} đến ${task.effectiveDestination} '
           'khoảng ${task.travelMinutes} phút.',
       tz.TZDateTime.from(notifyTime, tz.local),
       _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
+      payload: task.id,
     );
 
-    print(
+    debugPrint(
       'Đã đặt notification di chuyển cho "${task.title}". '
       'Xuất phát lúc $departureLabel, nhắc trước ${task.departReminderMinutes} phút.',
     );
@@ -220,22 +238,23 @@ class NotificationService {
     final scheduledTime = DateTime.now().add(const Duration(seconds: 10));
 
     await _plugin.zonedSchedule(
-      task.id.hashCode,
+      _safeNotificationId(task.id),
       title,
       body,
       tz.TZDateTime.from(scheduledTime, tz.local),
       _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
+      payload: task.id,
     );
 
-    print('Đã đặt demo notification thật sau 10 giây cho task "${task.title}".');
+    debugPrint('Đã đặt demo notification thật sau 10 giây cho task "${task.title}".');
   }
 
   Future<void> cancelTaskReminder(String taskId) async {
     await init();
-    await _plugin.cancel(taskId.hashCode);
+    await _plugin.cancel(_safeNotificationId(taskId));
   }
 
   String _formatTime(DateTime value) {
