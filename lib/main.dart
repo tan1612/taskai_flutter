@@ -15,7 +15,12 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  await dotenv.load(fileName: '.env');
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (e) {
+    debugPrint('Không tải được file .env: $e');
+  }
+
   await initializeDateFormatting('vi_VN');
 
   await HiveService.init();
