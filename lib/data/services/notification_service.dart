@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:taskai/data/models/task_model.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -15,13 +18,23 @@ class NotificationService {
 
   bool _initialized = false;
 
+  static const String _channelId = 'taskai_deadline_channel';
+  static const String _channelName = 'TaskAI Reminders';
+  static const String _channelDescription =
+      'Thông báo nhắc công việc và lịch di chuyển';
+
   Future<void> init() async {
     if (_initialized) return;
 
     tz.initializeTimeZones();
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const ios = DarwinInitializationSettings();
+
+    const ios = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
 
     await _plugin.initialize(
       const InitializationSettings(
@@ -36,15 +49,46 @@ class NotificationService {
     await androidPlugin?.requestNotificationsPermission();
 
     const channel = AndroidNotificationChannel(
-      'taskai_deadline_channel',
-      'TaskAI Reminders',
-      description: 'Thông báo nhắc công việc và lịch di chuyển',
+      _channelId,
+      _channelName,
+      description: _channelDescription,
       importance: Importance.high,
     );
 
     await androidPlugin?.createNotificationChannel(channel);
 
+    if (!kIsWeb && Platform.isIOS) {
+      final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+
+      await iosPlugin?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    }
+
     _initialized = true;
+  }
+
+  NotificationDetails get _notificationDetails {
+    return const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _channelId,
+        _channelName,
+        channelDescription: _channelDescription,
+        importance: Importance.high,
+        priority: Priority.high,
+        ticker: 'TaskAI',
+      ),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        presentBanner: true,
+        presentList: true,
+      ),
+    );
   }
 
   Future<void> showTestNotification() async {
@@ -54,18 +98,10 @@ class NotificationService {
       10001,
       'TaskAI thông báo thử',
       'Nếu bạn thấy thông báo này thì notification đã hoạt động.',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'taskai_deadline_channel',
-          'TaskAI Reminders',
-          channelDescription: 'Thông báo nhắc công việc và lịch di chuyển',
-          importance: Importance.high,
-          priority: Priority.high,
-          ticker: 'TaskAI',
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
+      _notificationDetails,
     );
+
+    print('Đã gọi showTestNotification.');
   }
 
   Future<void> scheduleTaskReminder(TaskModel task) async {
@@ -109,17 +145,7 @@ class NotificationService {
       'TaskAI nhắc deadline',
       'Còn $reminderMinutes phút đến deadline: ${task.title}',
       tz.TZDateTime.from(scheduledTime, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'taskai_deadline_channel',
-          'TaskAI Reminders',
-          channelDescription: 'Thông báo nhắc công việc và lịch di chuyển',
-          importance: Importance.high,
-          priority: Priority.high,
-          ticker: 'TaskAI',
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
+      _notificationDetails,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -167,17 +193,7 @@ class NotificationService {
           'Từ ${task.effectiveOrigin} đến ${task.effectiveDestination} '
           'khoảng ${task.travelMinutes} phút.',
       tz.TZDateTime.from(notifyTime, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'taskai_deadline_channel',
-          'TaskAI Reminders',
-          channelDescription: 'Thông báo nhắc công việc và lịch di chuyển',
-          importance: Importance.high,
-          priority: Priority.high,
-          ticker: 'TaskAI',
-        ),
-        iOS: DarwinNotificationDetails(),
-      ),
+      _notificationDetails,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
@@ -190,6 +206,10 @@ class NotificationService {
   }
 
   Future<void> _scheduleDemoAfter10Seconds(TaskModel task) async {
+    await init();
+
+    print('Đã đặt lịch demo notification sau 10 giây cho task "${task.title}".');
+
     Future.delayed(const Duration(seconds: 10), () async {
       final title = task.isLocationTask
           ? 'TaskAI nhắc di chuyển'
@@ -204,23 +224,11 @@ class NotificationService {
         task.id.hashCode,
         title,
         body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'taskai_deadline_channel',
-            'TaskAI Reminders',
-            channelDescription: 'Thông báo nhắc công việc và lịch di chuyển',
-            importance: Importance.high,
-            priority: Priority.high,
-            ticker: 'TaskAI',
-          ),
-          iOS: DarwinNotificationDetails(),
-        ),
+        _notificationDetails,
       );
 
       print('Đã hiện thông báo demo cho task "${task.title}".');
     });
-
-    print('Đã đặt lịch demo notification sau 10 giây cho task "${task.title}".');
   }
 
   Future<void> cancelTaskReminder(String taskId) async {
