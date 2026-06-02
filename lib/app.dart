@@ -38,21 +38,27 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _index = 0;
 
-  static const _screens = [
-    HomeScreen(),
-    TaskListScreen(),
-    ScheduleScreen(),
-    ChatbotScreen(),
-    StatsScreen(),
-    SettingsScreen(),
-  ];
+  void _goHome() {
+    setState(() {
+      _index = 0;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const HomeScreen(),
+      const TaskListScreen(),
+      const ScheduleScreen(),
+      ChatbotScreen(onBackHome: _goHome),
+      const StatsScreen(),
+      const SettingsScreen(),
+    ];
+
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: _screens,
+        children: screens,
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,

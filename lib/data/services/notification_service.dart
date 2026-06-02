@@ -208,27 +208,29 @@ class NotificationService {
   Future<void> _scheduleDemoAfter10Seconds(TaskModel task) async {
     await init();
 
-    print('Đã đặt lịch demo notification sau 10 giây cho task "${task.title}".');
+    final title = task.isLocationTask
+        ? 'TaskAI nhắc di chuyển'
+        : 'TaskAI nhắc deadline';
 
-    Future.delayed(const Duration(seconds: 10), () async {
-      final title = task.isLocationTask
-          ? 'TaskAI nhắc di chuyển'
-          : 'TaskAI nhắc deadline';
+    final body = task.isLocationTask
+        ? 'Bạn nên đi từ ${task.effectiveOrigin} đến ${task.effectiveDestination}. '
+            'Thời gian di chuyển khoảng ${task.travelMinutes} phút.'
+        : 'Task demo: ${task.title}';
 
-      final body = task.isLocationTask
-          ? 'Bạn nên đi từ ${task.effectiveOrigin} đến ${task.effectiveDestination}. '
-              'Thời gian di chuyển khoảng ${task.travelMinutes} phút.'
-          : 'Task demo: ${task.title}';
+    final scheduledTime = DateTime.now().add(const Duration(seconds: 10));
 
-      await _plugin.show(
-        task.id.hashCode,
-        title,
-        body,
-        _notificationDetails,
-      );
+    await _plugin.zonedSchedule(
+      task.id.hashCode,
+      title,
+      body,
+      tz.TZDateTime.from(scheduledTime, tz.local),
+      _notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
 
-      print('Đã hiện thông báo demo cho task "${task.title}".');
-    });
+    print('Đã đặt demo notification thật sau 10 giây cho task "${task.title}".');
   }
 
   Future<void> cancelTaskReminder(String taskId) async {

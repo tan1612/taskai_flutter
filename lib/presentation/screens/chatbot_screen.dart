@@ -4,7 +4,12 @@ import 'package:taskai/presentation/providers/chat_provider.dart';
 import 'package:taskai/presentation/widgets/chat_bubble.dart';
 
 class ChatbotScreen extends ConsumerStatefulWidget {
-  const ChatbotScreen({super.key});
+  final VoidCallback? onBackHome;
+
+  const ChatbotScreen({
+    super.key,
+    this.onBackHome,
+  });
 
   @override
   ConsumerState<ChatbotScreen> createState() => _ChatbotScreenState();
@@ -21,15 +26,31 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     super.dispose();
   }
 
+  void _goHome() {
+    if (widget.onBackHome != null) {
+      widget.onBackHome!();
+      return;
+    }
+
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
   void _send() {
-    final text = _controller.text;
+    final text = _controller.text.trim();
+
+    if (text.isEmpty) return;
+
     _controller.clear();
     ref.read(chatProvider.notifier).send(text);
+
     Future.delayed(const Duration(milliseconds: 250), _scrollToBottom);
   }
 
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
+
     _scrollController.animateTo(
       _scrollController.position.maxScrollExtent + 180,
       duration: const Duration(milliseconds: 250),
@@ -48,11 +69,17 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
         );
         ref.read(chatProvider.notifier).clearError();
       }
+
       Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
     });
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Về trang chủ',
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _goHome,
+        ),
         title: const Text(
           'Chatbot AI',
           style: TextStyle(fontWeight: FontWeight.w900),
@@ -71,8 +98,10 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                     alignment: Alignment.centerLeft,
                     child: Card(
                       child: Padding(
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -89,6 +118,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                     ),
                   );
                 }
+
                 return ChatBubble(message: state.messages[index]);
               },
             ),
