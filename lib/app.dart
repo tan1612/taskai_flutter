@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskai/core/constants/app_constants.dart';
 import 'package:taskai/core/theme/app_theme.dart';
 import 'package:taskai/presentation/providers/app_providers.dart';
+import 'package:taskai/presentation/providers/auth_provider.dart';
+import 'package:taskai/presentation/screens/auth/login_screen.dart';
 import 'package:taskai/presentation/screens/chatbot_screen.dart';
 import 'package:taskai/presentation/screens/home_screen.dart';
 import 'package:taskai/presentation/screens/schedule_screen.dart';
@@ -16,6 +18,8 @@ class TaskAIApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    final authState = ref.watch(authStateProvider);
+    final isGuest = ref.watch(guestModeProvider);
 
     return MaterialApp(
       title: AppConstants.appName,
@@ -23,7 +27,28 @@ class TaskAIApp extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
-      home: const MainShell(),
+      home: authState.when(
+        data: (user) {
+          if (user != null || isGuest) {
+            return const MainShell();
+          }
+          return LoginScreen(
+            onContinueAsGuest: () {
+              ref.read(guestModeProvider.notifier).state = true;
+            },
+          );
+        },
+        loading: () => const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+        error: (err, stack) => Scaffold(
+          body: Center(
+            child: Text('Lỗi khởi động: $err'),
+          ),
+        ),
+      ),
     );
   }
 }

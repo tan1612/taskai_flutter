@@ -3,6 +3,7 @@ class AppConstants {
 
   static const String taskBox = 'tasks';
   static const String settingsBox = 'settings';
+  static const String timetableBox = 'timetable';
 
   static const String defaultCity = 'Ho Chi Minh City';
 

@@ -1,30 +1,21 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:taskai/main.dart';
+import 'package:taskai/core/utils/date_utils.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('AppDateUtils Unit Tests', () {
+    test('dateTime formats correctly', () {
+      final date = DateTime(2026, 6, 5, 15, 30);
+      final formatted = AppDateUtils.dateTime(date);
+      expect(formatted, '15:30 - 05/06/2026');
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('isSameDayOnly identifies same days', () {
+      final date1 = DateTime(2026, 6, 5, 10, 0);
+      final date2 = DateTime(2026, 6, 5, 18, 45);
+      final differentDate = DateTime(2026, 6, 6, 10, 0);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+      expect(AppDateUtils.isSameDayOnly(date1, date2), isTrue);
+      expect(AppDateUtils.isSameDayOnly(date1, differentDate), isFalse);
+    });
   });
 }

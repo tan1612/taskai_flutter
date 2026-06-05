@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskai/data/models/chat_message.dart';
 import 'package:taskai/data/models/task_model.dart';
-import 'package:taskai/data/models/weather_model.dart';
 import 'package:taskai/presentation/providers/app_providers.dart';
 import 'package:taskai/presentation/providers/task_provider.dart';
 import 'package:taskai/presentation/providers/weather_provider.dart';

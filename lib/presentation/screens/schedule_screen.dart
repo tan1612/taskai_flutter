@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskai/core/utils/calendar_exporter.dart';
 import 'package:taskai/data/models/task_model.dart';
-import 'package:taskai/presentation/providers/task_provider.dart';
+import 'package:taskai/presentation/providers/app_providers.dart';
+import 'package:taskai/presentation/screens/timetable_form_screen.dart';
+import 'package:taskai/presentation/widgets/timetable_grid_view.dart';
 
 class ScheduleScreen extends ConsumerStatefulWidget {
   const ScheduleScreen({super.key});
@@ -10,13 +13,25 @@ class ScheduleScreen extends ConsumerStatefulWidget {
   ConsumerState<ScheduleScreen> createState() => _ScheduleScreenState();
 }
 
-class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
+class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
+    with SingleTickerProviderStateMixin {
   late DateTime _weekStart;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _weekStart = _getStartOfWeek(DateTime.now());
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   DateTime _getStartOfWeek(DateTime date) {
@@ -123,7 +138,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       return '${_formatTime(task.startTime!)} - ${_formatTime(task.endTime!)}';
     }
 
-    return 'Deadline ${_formatTime(task.deadline)}';
+    return _formatTime(task.deadline);
   }
 
   String _departureLabel(TaskModel task) {
@@ -135,23 +150,31 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
       Duration(minutes: task.travelMinutes),
     );
 
-    return 'Nên xuất phát lúc ${_formatTime(departureTime)}';
+    return 'Nên đi lúc ${_formatTime(departureTime)}';
   }
 
-  Color _priorityColor(TaskPriority priority) {
-    switch (priority) {
-      case TaskPriority.high:
-        return const Color(0xFFFF5252);
-      case TaskPriority.medium:
-        return const Color(0xFFFFB020);
-      case TaskPriority.low:
-        return const Color(0xFF22C55E);
+  Future<void> _exportCalendar(List<TaskModel> weekTasks) async {
+    if (weekTasks.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không có lịch biểu để xuất.')),
+      );
+      return;
+    }
+
+    try {
+      await CalendarExporter.exportTasksToIcs(weekTasks);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lỗi xuất lịch: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final tasks = ref.watch(taskProvider);
+    final allTasks = ref.watch(taskProvider);
+    final timetableSlots = ref.watch(timetableProvider);
+
     final weekDays = List.generate(
       7,
       (index) => _weekStart.add(Duration(days: index)),
@@ -159,90 +182,142 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
 
     final weekEnd = _weekStart.add(const Duration(days: 6));
 
+    // Filter tasks occurring in the selected week
+    final weekTasks = allTasks.where((task) {
+      final tTime = task.isLocationTask && task.startTime != null ? task.startTime! : task.deadline;
+      return tTime.isAfter(_weekStart.subtract(const Duration(seconds: 1))) &&
+          tTime.isBefore(weekEnd.add(const Duration(days: 1)));
+    }).toList();
+
+    final scheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Lịch biểu',
+          'Lịch trình & Lớp học',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         actions: [
-          IconButton(
-            onPressed: _currentWeek,
-            icon: const Icon(Icons.today_rounded),
-            tooltip: 'Tuần hiện tại',
-          ),
+          if (_tabController.index == 0) ...[
+            IconButton(
+              onPressed: () => _exportCalendar(weekTasks),
+              icon: const Icon(Icons.share_rounded),
+              tooltip: 'Xuất lịch tuần này (.ics)',
+            ),
+            IconButton(
+              onPressed: _currentWeek,
+              icon: const Icon(Icons.today_rounded),
+              tooltip: 'Tuần hiện tại',
+            ),
+          ],
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorSize: TabBarIndicatorSize.tab,
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.checklist_rounded),
+              text: 'Nhiệm vụ tuần này',
+            ),
+            Tab(
+              icon: Icon(Icons.calendar_view_week_rounded),
+              text: 'Thời khóa biểu',
+            ),
+          ],
+        ),
       ),
-      body: Column(
+      body: TabBarView(
+        controller: _tabController,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 12,
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      onPressed: _previousWeek,
-                      icon: const Icon(Icons.chevron_left_rounded),
+          // TAB 1: Lịch nhiệm vụ và học tập theo tuần
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(color: scheme.outlineVariant.withOpacity(0.3)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 12,
                     ),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          const Text(
-                            'Thời khóa biểu tuần',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 16,
-                            ),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: _previousWeek,
+                          icon: const Icon(Icons.chevron_left_rounded),
+                        ),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              const Text(
+                                'Lịch học và công việc',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${_formatFullDate(_weekStart)} - ${_formatFullDate(weekEnd)}',
+                                style: TextStyle(
+                                  color: scheme.onSurface.withOpacity(0.7),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${_formatFullDate(_weekStart)} - ${_formatFullDate(weekEnd)}',
-                            style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withOpacity(0.7),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        IconButton(
+                          onPressed: _nextWeek,
+                          icon: const Icon(Icons.chevron_right_rounded),
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      onPressed: _nextWeek,
-                      icon: const Icon(Icons.chevron_right_rounded),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-              itemCount: weekDays.length,
-              itemBuilder: (context, index) {
-                final date = weekDays[index];
-                final dayTasks = _tasksForDate(tasks, date);
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                  itemCount: weekDays.length,
+                  itemBuilder: (context, index) {
+                    final date = weekDays[index];
+                    final dayTasks = _tasksForDate(allTasks, date);
 
-                return _DayScheduleSection(
-                  dateLabel: '${_weekdayLabel(date)}, ${_formatDate(date)}',
-                  isToday: _isSameDay(date, DateTime.now()),
-                  tasks: dayTasks,
-                  taskTimeLabel: _taskTimeLabel,
-                  departureLabel: _departureLabel,
-                  priorityColor: _priorityColor,
-                );
-              },
-            ),
+                    return _DayScheduleSection(
+                      dateLabel: '${_weekdayLabel(date)}, ${_formatDate(date)}',
+                      isToday: _isSameDay(date, DateTime.now()),
+                      tasks: dayTasks,
+                      taskTimeLabel: _taskTimeLabel,
+                      departureLabel: _departureLabel,
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
+
+          // TAB 2: Thời khóa biểu sinh viên dạng lưới
+          TimetableGridView(slots: timetableSlots),
         ],
       ),
+      floatingActionButton: _tabController.index == 1
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const TimetableFormScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Thêm môn'),
+            )
+          : null,
     );
   }
 }
@@ -253,7 +328,6 @@ class _DayScheduleSection extends StatelessWidget {
   final List<TaskModel> tasks;
   final String Function(TaskModel task) taskTimeLabel;
   final String Function(TaskModel task) departureLabel;
-  final Color Function(TaskPriority priority) priorityColor;
 
   const _DayScheduleSection({
     required this.dateLabel,
@@ -261,7 +335,6 @@ class _DayScheduleSection extends StatelessWidget {
     required this.tasks,
     required this.taskTimeLabel,
     required this.departureLabel,
-    required this.priorityColor,
   });
 
   @override
@@ -269,10 +342,11 @@ class _DayScheduleSection extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header Day Label
           Row(
             children: [
               if (isToday)
@@ -290,35 +364,37 @@ class _DayScheduleSection extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w900,
-                  color: isToday ? scheme.primary : null,
+                  color: isToday ? scheme.primary : scheme.onSurface,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
+          
           if (tasks.isEmpty)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
               decoration: BoxDecoration(
-                color: scheme.surface,
-                borderRadius: BorderRadius.circular(20),
+                color: scheme.surfaceContainerHighest.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: scheme.outlineVariant.withOpacity(0.15)),
               ),
               child: Text(
-                'Không có lịch trong ngày này.',
+                'Không có lịch học hay công việc.',
                 style: TextStyle(
-                  color: scheme.onSurface.withOpacity(0.65),
+                  color: scheme.onSurface.withOpacity(0.5),
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             )
           else
             ...tasks.map(
-              (task) => _ScheduleTaskTile(
+              (task) => _ScheduleTaskRow(
                 task: task,
                 timeLabel: taskTimeLabel(task),
                 departureLabel: departureLabel(task),
-                priorityColor: priorityColor(task.priority),
               ),
             ),
         ],
@@ -327,128 +403,196 @@ class _DayScheduleSection extends StatelessWidget {
   }
 }
 
-class _ScheduleTaskTile extends StatelessWidget {
+class _ScheduleTaskRow extends StatelessWidget {
   final TaskModel task;
   final String timeLabel;
   final String departureLabel;
-  final Color priorityColor;
 
-  const _ScheduleTaskTile({
+  const _ScheduleTaskRow({
     required this.task,
     required this.timeLabel,
     required this.departureLabel,
-    required this.priorityColor,
   });
+
+  // Timetable Pastel Styles
+  Color get _backgroundColor {
+    switch (task.priority) {
+      case TaskPriority.high:
+        return const Color(0xFFFFEBEE); // Pastel Red
+      case TaskPriority.medium:
+        return const Color(0xFFFFF3E0); // Pastel Orange
+      case TaskPriority.low:
+        return const Color(0xFFE8F5E9); // Pastel Green
+    }
+  }
+
+  Color get _textColor {
+    switch (task.priority) {
+      case TaskPriority.high:
+        return const Color(0xFFC62828);
+      case TaskPriority.medium:
+        return const Color(0xFFE65100);
+      case TaskPriority.low:
+        return const Color(0xFF2E7D32);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 5,
-              height: 74,
-              decoration: BoxDecoration(
-                color: priorityColor,
-                borderRadius: BorderRadius.circular(999),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left: Time indicator column
+          SizedBox(
+            width: 65,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                timeLabel,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                  color: scheme.primary,
+                ),
               ),
             ),
-            const SizedBox(width: 12),
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: scheme.primary.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
+          ),
+          
+          // Timeline Node Indicator
+          Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: _textColor,
+                  shape: BoxShape.circle,
+                ),
               ),
-              child: Icon(
-                task.isLocationTask
-                    ? Icons.route_rounded
-                    : Icons.task_alt_rounded,
-                color: scheme.primary,
+              Container(
+                width: 2,
+                height: 55,
+                color: _textColor.withOpacity(0.25),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    timeLabel,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      color: scheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    task.title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w900,
-                      decoration:
-                          task.isDone ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                  if (task.isLocationTask &&
-                      task.locationName != null &&
-                      task.locationName!.trim().isNotEmpty) ...[
-                    const SizedBox(height: 5),
+            ],
+          ),
+          const SizedBox(width: 12),
+
+          // Right: Colored Class Block Card
+          Expanded(
+            child: Card(
+              color: _backgroundColor,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: _textColor.withOpacity(0.15), width: 1.2),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Tag and Title
                     Row(
                       children: [
-                        Icon(
-                          Icons.place_rounded,
-                          size: 15,
-                          color: scheme.onSurface.withOpacity(0.65),
-                        ),
-                        const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            task.locationName!.trim(),
-                            overflow: TextOverflow.ellipsis,
+                            task.title,
                             style: TextStyle(
-                              color: scheme.onSurface.withOpacity(0.75),
-                              fontWeight: FontWeight.w600,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w900,
+                              color: _textColor,
+                              decoration: task.isDone ? TextDecoration.lineThrough : null,
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ],
-                  if (departureLabel.isNotEmpty) ...[
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.directions_walk_rounded,
-                          size: 15,
-                          color: scheme.secondary,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            departureLabel,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: scheme.secondary,
-                              fontWeight: FontWeight.w700,
+                        if (task.tag.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _textColor.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              task.tag,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: _textColor,
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
+                    const SizedBox(height: 4),
+
+                    // Destination location
+                    if (task.isLocationTask &&
+                        task.locationName != null &&
+                        task.locationName!.isNotEmpty) ...[
+                      Row(
+                        children: [
+                          Icon(Icons.place_rounded, size: 13, color: _textColor.withOpacity(0.7)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Địa điểm: ${task.locationName}',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: _textColor.withOpacity(0.8),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // Departure instruction
+                    if (departureLabel.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.directions_walk_rounded, size: 13, color: _textColor),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              departureLabel,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w800,
+                                color: _textColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // Travel details
+                    if (task.isLocationTask) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Thời gian di chuyển: ${task.travelMinutes} phút (${task.effectiveOrigin} → ${task.effectiveDestination})',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                          color: _textColor.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -48,6 +48,11 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
     Future.delayed(const Duration(milliseconds: 250), _scrollToBottom);
   }
 
+  void _sendDirectly(String text) {
+    ref.read(chatProvider.notifier).send(text);
+    Future.delayed(const Duration(milliseconds: 250), _scrollToBottom);
+  }
+
   void _scrollToBottom() {
     if (!_scrollController.hasClients) return;
 
@@ -55,6 +60,26 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
       _scrollController.position.maxScrollExtent + 180,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
+    );
+  }
+
+  Widget _buildQuickChip(String text, ChatState state) {
+    final scheme = Theme.of(context).colorScheme;
+    return ActionChip(
+      label: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w800,
+          color: scheme.primary,
+        ),
+      ),
+      backgroundColor: scheme.primary.withOpacity(0.08),
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      onPressed: state.isLoading ? null : () => _sendDirectly(text),
     );
   }
 
@@ -81,7 +106,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           onPressed: _goHome,
         ),
         title: const Text(
-          'Chatbot AI',
+          'Trợ lý AI Chatbot',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
@@ -111,7 +136,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                             SizedBox(width: 10),
-                            Text('TaskAI đang suy nghĩ...'),
+                            Text('TaskAI đang lập kế hoạch...'),
                           ],
                         ),
                       ),
@@ -123,15 +148,38 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               },
             ),
           ),
+          
+          // Quick action chips for students
+          Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            decoration: BoxDecoration(
+              color: Theme.of(context).scaffoldBackgroundColor,
+            ),
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _buildQuickChip('Hôm nay tôi nên làm gì trước?', state),
+                const SizedBox(width: 8),
+                _buildQuickChip('Task nào sắp trễ?', state),
+                const SizedBox(width: 8),
+                _buildQuickChip('Thời tiết hôm nay có ảnh hưởng lịch của tôi không?', state),
+                const SizedBox(width: 8),
+                _buildQuickChip('Lập kế hoạch học tập hôm nay', state),
+              ],
+            ),
+          ),
+
           SafeArea(
             top: false,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
                 border: Border(
                   top: BorderSide(
-                    color: Theme.of(context).dividerColor.withOpacity(0.25),
+                    color: Theme.of(context).dividerColor.withOpacity(0.15),
                   ),
                 ),
               ),

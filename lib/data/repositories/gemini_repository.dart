@@ -19,23 +19,21 @@ class GeminiRepository {
     final latestQuestion = history.last.content;
 
     if (apiKey.trim().isEmpty) {
-      return _fallbackAnswer(latestQuestion);
+      return _fallbackAnswer(latestQuestion, tasks, weatherContext);
     }
 
     final taskContext = _buildTaskContext(tasks);
     final weatherText = _buildWeatherContext(weatherContext);
 
     final systemPrompt = '''
-Bạn là TaskAI, trợ lý quản lý công việc thông minh bằng tiếng Việt.
+Bạn là TaskAI Pro, trợ lý học tập và di chuyển cá nhân thông minh bằng tiếng Việt của sinh viên.
 
 Nhiệm vụ:
-- Tư vấn cách sắp xếp deadline dựa trên danh sách task thực tế của người dùng.
-- Nếu có dữ liệu thời tiết, hãy dùng thời tiết để tư vấn việc đi học, đi làm, đi ra ngoài, di chuyển.
-- Với task có di chuyển, hãy chú ý giờ bắt đầu, thời gian di chuyển dự kiến, giờ nên xuất phát.
-- Chia nhỏ công việc thành bước cụ thể.
-- Ưu tiên câu trả lời ngắn gọn, thực tế, dễ làm.
-- Khi người dùng hỏi về task, công việc, lịch trình, thời tiết — hãy dựa vào dữ liệu bên dưới để trả lời chính xác.
-- Không tự bịa task hoặc thời tiết nếu dữ liệu không có.
+- Tư vấn cách sắp xếp công việc, mức độ ưu tiên dựa trên danh sách task thực tế của người dùng bên dưới.
+- Nếu người dùng hỏi "Hôm nay tôi nên làm gì trước?" hoặc "Lập kế hoạch học tập hôm nay": Hãy phân tích các task của hôm nay, khuyên làm trước các task chưa xong có độ ưu tiên cao (High) hoặc deadline cận kề nhất. Chia nhỏ công việc ra thành 3 bước nhỏ.
+- Nếu người dùng hỏi "Task nào sắp trễ?": Cảnh báo về các task chưa xong đã quá deadline (trễ hạn) hoặc còn dưới 24h.
+- Nếu người dùng hỏi "Thời tiết có ảnh hưởng gì không?": Liên kết thời tiết hiện tại/dự báo với lịch di chuyển của họ. Cảnh báo mang ô/áo mưa nếu trời mưa, khuyên mang mũ/nước nếu nắng nóng.
+- Trả lời ngắn gọn, có cấu trúc bullet point rõ ràng, thân thiện. Không tự bịa task hoặc thời tiết nếu dữ liệu không có.
 
 $weatherText
 
@@ -73,7 +71,7 @@ $taskContext
           response.data['choices'][0]['message']['content']?.toString();
 
       if (text == null || text.trim().isEmpty) {
-        return _fallbackAnswer(latestQuestion);
+        return _fallbackAnswer(latestQuestion, tasks, weatherContext);
       }
 
       return text.trim();
@@ -81,24 +79,23 @@ $taskContext
       print('=== GROQ ERROR ===');
       print('Status: ${e.response?.statusCode}');
       print('Body: ${e.response?.data}');
-      return _fallbackAnswer(latestQuestion);
+      return _fallbackAnswer(latestQuestion, tasks, weatherContext);
     } catch (e) {
       print('=== UNKNOWN ERROR: $e ===');
-      return _fallbackAnswer(latestQuestion);
+      return _fallbackAnswer(latestQuestion, tasks, weatherContext);
     }
   }
 
   String _buildWeatherContext(String? weatherContext) {
     if (weatherContext == null || weatherContext.trim().isEmpty) {
       return '''
-=== THỜI TIẾT HIỆN TẠI ===
+=== THỜI TIẾT HIỆN TẠI & DỰ BÁO ===
 Chưa có dữ liệu thời tiết được truyền vào chatbot.
-Nếu người dùng hỏi thời tiết, hãy nói rằng hiện chưa đọc được thời tiết trong chatbot.
 ''';
     }
 
     return '''
-=== THỜI TIẾT HIỆN TẠI ===
+=== THỜI TIẾT HIỆN TẠI & DỰ BÁO ===
 ${weatherContext.trim()}
 ''';
   }
@@ -153,26 +150,11 @@ ${weatherContext.trim()}
             buffer.writeln('  Địa điểm: ${t.locationName!.trim()}');
           }
 
-          if (t.locationAddress != null &&
-              t.locationAddress!.trim().isNotEmpty) {
-            buffer.writeln('  Địa chỉ/ghi chú: ${t.locationAddress!.trim()}');
-          }
-
           buffer.writeln('  Thời gian di chuyển dự kiến: ${t.travelMinutes} phút');
 
           final departureTime = t.departureTime;
-          final notifyTime = t.departureNotificationTime;
-
           if (departureTime != null) {
             buffer.writeln('  Giờ nên xuất phát: ${fmt.format(departureTime)}');
-          }
-
-          if (notifyTime != null && t.reminderMinutes != 0) {
-            if (t.reminderMinutes == -1) {
-              buffer.writeln('  Nhắc di chuyển: Demo sau 10 giây');
-            } else {
-              buffer.writeln('  Giờ thông báo dự kiến: ${fmt.format(notifyTime)}');
-            }
           }
         } else {
           final diff = t.deadline.difference(now);
@@ -187,14 +169,6 @@ ${weatherContext.trim()}
           }
 
           buffer.writeln('  Deadline: ${fmt.format(t.deadline)} ($timeLeft)');
-
-          if (t.reminderMinutes == 0) {
-            buffer.writeln('  Nhắc deadline: Không nhắc');
-          } else if (t.reminderMinutes == -1) {
-            buffer.writeln('  Nhắc deadline: Demo sau 10 giây');
-          } else {
-            buffer.writeln('  Nhắc trước deadline: ${t.reminderMinutes} phút');
-          }
         }
 
         if (t.description.trim().isNotEmpty) {
@@ -220,33 +194,89 @@ ${weatherContext.trim()}
     return buffer.toString();
   }
 
-  String _fallbackAnswer(String question) {
+  String _fallbackAnswer(String question, List<TaskModel> tasks, String? weatherContext) {
     final lower = question.toLowerCase().trim();
+    final now = DateTime.now();
+
+    // 1. Ask what to do today
+    if (lower.contains('làm gì') || lower.contains('kế hoạch') || lower.contains('gợi ý')) {
+      final todayPending = tasks.where((t) {
+        final compareDate = t.isLocationTask && t.startTime != null ? t.startTime! : t.deadline;
+        return !t.isDone &&
+            compareDate.year == now.year &&
+            compareDate.month == now.month &&
+            compareDate.day == now.day;
+      }).toList();
+
+      if (todayPending.isEmpty) {
+        return 'Hệ thống đang offline, nhưng theo lịch lưu cục bộ: Bạn không có task chưa xong nào trong ngày hôm nay! Bạn có thể thư giãn hoặc tạo thêm task mới. 🎉';
+      }
+
+      todayPending.sort((a, b) => b.priority.weight.compareTo(a.priority.weight));
+      final topTask = todayPending.first;
+
+      final buffer = StringBuffer();
+      buffer.writeln('Trợ lý đang chạy ở chế độ offline. Gợi ý lịch trình hôm nay cho bạn:');
+      buffer.writeln('Hôm nay bạn có ${todayPending.length} việc chưa hoàn thành.');
+      buffer.writeln('👉 **Nên làm trước**: **${topTask.title}** [Ưu tiên: ${topTask.priority.label}]');
+      if (topTask.description.isNotEmpty) {
+        buffer.writeln('   Mô tả: ${topTask.description}');
+      }
+      buffer.writeln('\nDanh sách việc hôm nay:');
+      for (final t in todayPending) {
+        buffer.writeln('- [${t.priority.label}] ${t.title}');
+      }
+      return buffer.toString();
+    }
+
+    // 2. Ask about late/overdue tasks
+    if (lower.contains('trễ') || lower.contains('hạn')) {
+      final overdue = tasks.where((t) {
+        final compareDate = t.isLocationTask && t.startTime != null ? t.startTime! : t.deadline;
+        return !t.isDone && compareDate.isBefore(now);
+      }).toList();
+
+      if (overdue.isEmpty) {
+        return 'Chúc mừng! Bạn không có công việc nào bị trễ hạn ở chế độ offline. 👍';
+      }
+
+      final buffer = StringBuffer();
+      buffer.writeln('⚠️ Cảnh báo: Bạn đang có ${overdue.length} công việc trễ hạn:');
+      for (final t in overdue) {
+        final delay = now.difference(t.isLocationTask && t.startTime != null ? t.startTime! : t.deadline).inHours;
+        buffer.writeln('- **${t.title}** (Đã trễ khoảng $delay giờ)');
+      }
+      buffer.writeln('\nHãy cố gắng hoàn thành sớm nhé!');
+      return buffer.toString();
+    }
+
+    // 3. Ask about weather
+    if (lower.contains('thời tiết') || lower.contains('mưa') || lower.contains('nắng')) {
+      if (weatherContext != null && weatherContext.trim().isNotEmpty) {
+        // Try to extract current weather
+        final lines = weatherContext.split('\n');
+        final currentInfo = lines.take(6).join('\n');
+        return 'Cập nhật thời tiết ngoại tuyến của bạn:\n$currentInfo\n\n*Lưu ý: Do đang mất kết nối AI, tôi chỉ hiển thị thông tin thời tiết thô.*';
+      }
+      return 'Hiện tại ứng dụng đang mất kết nối mạng và không có sẵn dữ liệu thời tiết để phản hồi.';
+    }
+
+    // 4. Statistics request
+    if (lower.contains('thống kê') || lower.contains('tỷ lệ')) {
+      final total = tasks.length;
+      final done = tasks.where((t) => t.isDone).length;
+      final percent = total == 0 ? 0 : ((done / total) * 100).round();
+      return 'Thống kê công việc hiện tại (Offline):\n'
+          '- Tổng số công việc: $total\n'
+          '- Đã hoàn thành: $done\n'
+          '- Chưa hoàn thành: ${total - done}\n'
+          '- Tỷ lệ hoàn thành: $percent%';
+    }
 
     if (lower.isEmpty) {
-      return 'Bạn hãy nhập công việc hoặc câu hỏi cụ thể, mình sẽ giúp bạn sắp xếp kế hoạch hợp lý.';
+      return 'Chào bạn! Mình có thể giúp gì cho bạn trong việc quản lý thời gian và thời khóa biểu?';
     }
 
-    if (_containsAny(lower, ['xin chào', 'chào', 'hello', 'hi'])) {
-      return 'Xin chào! Mình là TaskAI. Mình có thể giúp bạn lập kế hoạch, chia nhỏ công việc, ưu tiên deadline và gợi ý cách làm việc hiệu quả hơn.';
-    }
-
-    if (_containsAny(lower, ['thời tiết', 'mưa', 'nắng', 'trời'])) {
-      return 'Hiện mình chưa đọc được dữ liệu thời tiết trong chatbot. Bạn cần truyền dữ liệu thời tiết từ Weather API vào chatbot để mình tư vấn chính xác hơn.';
-    }
-
-    if (_containsAny(lower, ['ưu tiên', 'quan trọng', 'nên làm gì trước'])) {
-      return 'Để ưu tiên công việc: 1) Làm trước task deadline gần nhất. 2) Nếu nhiều task cùng hạn, chọn task ưu tiên cao hơn. 3) Chỉ chọn 3 việc quan trọng nhất mỗi ngày.';
-    }
-
-    if (_containsAny(lower, ['deadline', 'hạn', 'trễ'])) {
-      return 'Để tránh trễ deadline: chia task thành mốc 25 phút, làm phần khó nhất trước, nếu quá gấp thì ưu tiên bản tối thiểu có thể nộp trước.';
-    }
-
-    return 'Mình đang mất kết nối. Hãy cho mình biết công việc, deadline và mức độ ưu tiên, mình sẽ giúp bạn lập kế hoạch.';
-  }
-
-  bool _containsAny(String text, List<String> keywords) {
-    return keywords.any((keyword) => text.contains(keyword));
+    return 'Trợ lý TaskAI Pro đang hoạt động ở chế độ offline (mất kết nối mạng hoặc thiếu API key). Bạn có thể hỏi về các công việc hôm nay, công việc trễ hạn, thống kê hoặc thời tiết hiện tại để mình trả lời nhanh nhé.';
   }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:taskai/data/services/email_service.dart';
 import 'package:taskai/presentation/providers/app_providers.dart';
+import 'package:taskai/presentation/providers/auth_provider.dart';
+import 'package:taskai/presentation/screens/auth/profile_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -27,10 +30,45 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _testWeeklyNotification(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref.read(notificationServiceProvider).scheduleWeeklyReminderTestAfter10Seconds();
+
+      final user = ref.read(authNotifierProvider).user;
+      bool emailSent = false;
+      if (user != null && user.email != null) {
+        emailSent = await EmailService.sendWeeklyPlanningEmailAlert(user.email!);
+      }
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(user != null
+              ? (emailSent
+                  ? 'Đã đặt thông báo thử sau 10s và gửi email test thành công!'
+                  : 'Đã đặt thông báo thử sau 10s (gửi email test thất bại, kiểm tra .env).')
+              : 'Đã đặt thông báo thử sau 10s. Để test email, vui lòng đăng nhập trước!'),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Không thể đặt thông báo thử: $e'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final notificationsEnabled = ref.watch(notificationEnabledProvider);
+    final weeklyReminderEnabled = ref.watch(weeklyReminderEnabledProvider);
+    final authState = ref.watch(authNotifierProvider);
+    final user = authState.user;
 
     return Scaffold(
       appBar: AppBar(
@@ -42,6 +80,32 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Card(
+            child: ListTile(
+              leading: Icon(
+                user != null ? Icons.account_circle_rounded : Icons.login_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              title: Text(
+                user != null ? 'Tài khoản cá nhân' : 'Đăng nhập / Đăng ký',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                user != null
+                    ? (user.email ?? 'Đã đăng nhập')
+                    : 'Đăng nhập để lưu và đồng bộ lịch trình Pro',
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const ProfileScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
           Card(
             child: SwitchListTile(
               value: themeMode == ThemeMode.dark,
@@ -73,6 +137,23 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           Card(
+            child: SwitchListTile(
+              value: weeklyReminderEnabled,
+              onChanged: (value) {
+                ref.read(weeklyReminderEnabledProvider.notifier).toggle(value);
+              },
+              title: const Text(
+                'Nhắc nhở tuần mới',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: const Text(
+                'Thông báo vào 19h mỗi Chủ Nhật để lên kế hoạch tuần tới',
+              ),
+              secondary: const Icon(Icons.calendar_month_rounded),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
             child: ListTile(
               leading: const Icon(Icons.notification_add_rounded),
               title: const Text(
@@ -84,6 +165,21 @@ class SettingsScreen extends ConsumerWidget {
               ),
               trailing: const Icon(Icons.chevron_right_rounded),
               onTap: () => _testNotification(context, ref),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.calendar_today_rounded),
+              title: const Text(
+                'Test nhắc nhở hàng tuần',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: const Text(
+                'Nhận thông báo lên lịch tuần mới sau 10 giây để kiểm tra',
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => _testWeeklyNotification(context, ref),
             ),
           ),
           const SizedBox(height: 12),

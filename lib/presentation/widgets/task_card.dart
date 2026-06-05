@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:taskai/core/theme/app_theme.dart';
 import 'package:taskai/data/models/task_model.dart';
 import 'package:taskai/presentation/screens/task_detail_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class TaskCard extends StatelessWidget {
   final TaskModel task;
@@ -45,47 +46,39 @@ class TaskCard extends StatelessWidget {
     return '$hour:$minute';
   }
 
-  String get _timeLabel {
-    if (task.isLocationTask && task.startTime != null && task.endTime != null) {
-      return '${_formatTime(task.startTime!)} - ${_formatTime(task.endTime!)}';
-    }
-
-    return _formatDateTime(task.deadline);
-  }
-
   String get _reminderLabel {
     switch (task.reminderMinutes) {
       case 0:
         return 'Không nhắc';
       case -1:
-        return 'Demo 10 giây';
+        return 'Demo 10s';
       case 5:
-        return 'Nhắc trước 5 phút';
+        return 'Trước 5 phút';
       case 10:
-        return 'Nhắc trước 10 phút';
+        return 'Trước 10 phút';
       case 15:
-        return 'Nhắc trước 15 phút';
+        return 'Trước 15 phút';
       case 30:
-        return 'Nhắc trước 30 phút';
+        return 'Trước 30 phút';
       case 60:
-        return 'Nhắc trước 1 tiếng';
+        return 'Trước 1 tiếng';
       case 1440:
-        return 'Nhắc trước 1 ngày';
+        return 'Trước 1 ngày';
       default:
         return 'Nhắc trước ${task.reminderMinutes} phút';
     }
   }
 
-  Color get _reminderColor {
-    if (task.reminderMinutes == 0) {
-      return Colors.grey;
+  Future<void> _openMaps() async {
+    if (task.googleMapsUrl == null || task.googleMapsUrl!.trim().isEmpty) return;
+    final uri = Uri.tryParse(task.googleMapsUrl!.trim());
+    if (uri != null) {
+      try {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (e) {
+        print('Không thể mở Google Maps: $e');
+      }
     }
-
-    if (task.reminderMinutes == -1) {
-      return AppTheme.secondary;
-    }
-
-    return AppTheme.primary;
   }
 
   void _openDetail(BuildContext context) {
@@ -102,9 +95,9 @@ class TaskCard extends StatelessWidget {
 
     final titleStyle = TextStyle(
       fontWeight: FontWeight.w900,
-      fontSize: 15,
+      fontSize: 16,
       decoration: task.isDone ? TextDecoration.lineThrough : null,
-      color: task.isDone ? scheme.onSurface.withOpacity(0.45) : null,
+      color: task.isDone ? scheme.onSurface.withOpacity(0.4) : scheme.onSurface,
     );
 
     return Dismissible(
@@ -147,197 +140,377 @@ class TaskCard extends StatelessWidget {
       onDismissed: (_) => onDelete(),
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: scheme.outlineVariant.withOpacity(0.4),
+            width: 1,
           ),
-
-          // Quan trọng: bấm vào card sẽ mở chi tiết
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
           onTap: () => _openDetail(context),
-
-          leading: Checkbox(
-            value: task.isDone,
-            onChanged: (_) => onToggle(),
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  task.title,
-                  style: titleStyle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              _TypeBadge(task: task),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _InfoChip(
-                  icon: task.isLocationTask
-                      ? Icons.access_time_rounded
-                      : Icons.schedule_rounded,
-                  label: _timeLabel,
-                  color: scheme.primary,
-                ),
-                if (task.isLocationTask &&
-                    task.locationName != null &&
-                    task.locationName!.trim().isNotEmpty)
-                  _InfoChip(
-                    icon: Icons.place_rounded,
-                    label: task.locationName!.trim(),
-                    color: AppTheme.secondary,
+                // Color indicator for priority
+                Container(
+                  width: 5,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: _priorityColor,
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                _InfoChip(
-                  icon: Icons.flag_rounded,
-                  label: task.priority.label,
-                  color: _priorityColor,
                 ),
-                _InfoChip(
-                  icon: Icons.sell_rounded,
-                  label: task.tag,
-                  color: scheme.secondary,
+                const SizedBox(width: 12),
+                
+                // Done checkbox
+                Checkbox(
+                  value: task.isDone,
+                  onChanged: (_) => onToggle(),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                 ),
-                _InfoChip(
-                  icon: Icons.notifications_active_rounded,
-                  label: _reminderLabel,
-                  color: _reminderColor,
+                const SizedBox(width: 8),
+
+                // Main Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Badges
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          // Tag
+                          if (task.tag.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: scheme.primary.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                task.tag,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: scheme.primary,
+                                ),
+                              ),
+                            ),
+                          // Priority badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: _priorityColor.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.flag_rounded, size: 12, color: _priorityColor),
+                                const SizedBox(width: 3),
+                                Text(
+                                  task.priority.label,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: _priorityColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Sync Status
+                          if (task.syncStatus != 'synced')
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: (task.syncStatus == 'failed' ? AppTheme.danger : AppTheme.warning).withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    task.syncStatus == 'failed' ? Icons.sync_problem_rounded : Icons.sync_rounded,
+                                    size: 12,
+                                    color: task.syncStatus == 'failed' ? AppTheme.danger : AppTheme.warning,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    task.syncStatus == 'failed' ? 'Lỗi sync' : 'Đang sync',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: task.syncStatus == 'failed' ? AppTheme.danger : AppTheme.warning,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // Title
+                      Text(
+                        task.title,
+                        style: titleStyle,
+                      ),
+
+                      // Description
+                      if (task.description.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          task.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: scheme.onSurface.withOpacity(0.6),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+
+                      // Di chuyển vs. Normal specifics
+                      if (task.isLocationTask) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: scheme.surfaceContainerHighest.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Departure -> Destination
+                              Row(
+                                children: [
+                                  Icon(Icons.directions_walk_rounded, size: 16, color: scheme.primary),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      '${task.effectiveOrigin} → ${task.effectiveDestination}',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              
+                              // Location name and address
+                              if (task.locationName != null && task.locationName!.isNotEmpty) ...[
+                                Row(
+                                  children: [
+                                    Icon(Icons.place_rounded, size: 14, color: scheme.secondary),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        '${task.locationName} (${task.locationAddress ?? ""})',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: scheme.onSurface.withOpacity(0.7),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+
+                              // Travel Time & Departure Info
+                              Row(
+                                children: [
+                                  Icon(Icons.directions_car_rounded, size: 14, color: scheme.onSurface.withOpacity(0.6)),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Di chuyển: ${task.travelMinutes} phút',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              
+                              // Departure Time and Start Time
+                              if (task.departureTime != null && task.startTime != null) ...[
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 6,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.alarm_rounded, size: 14, color: AppTheme.secondary),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'Xuất phát: ',
+                                          style: TextStyle(fontSize: 12, color: scheme.onSurface.withValues(alpha: 0.6)),
+                                        ),
+                                        Text(
+                                          _formatTime(task.departureTime!),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppTheme.secondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.play_circle_outline_rounded, size: 14, color: scheme.primary),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Vào học/lịch: ',
+                                          style: TextStyle(fontSize: 12, color: scheme.onSurface.withValues(alpha: 0.6)),
+                                        ),
+                                        Text(
+                                          _formatTime(task.startTime!),
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: scheme.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              
+                              // Google Maps Action
+                              if (task.googleMapsUrl != null && task.googleMapsUrl!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                InkWell(
+                                  onTap: _openMaps,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.map_rounded, size: 14, color: scheme.primary),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Chỉ đường Google Maps',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: scheme.primary,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // Normal Task deadline
+                        Row(
+                          children: [
+                            Icon(Icons.event_note_rounded, size: 15, color: scheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Hạn chót: ',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: scheme.onSurface.withOpacity(0.6),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            Text(
+                              _formatDateTime(task.deadline),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+
+                      // Notification Mode
+                      Row(
+                        children: [
+                          Icon(Icons.notifications_active_rounded, size: 13, color: scheme.onSurface.withOpacity(0.4)),
+                          const SizedBox(width: 6),
+                          Text(
+                            _reminderLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurface.withOpacity(0.5),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Trailing actions (Popup menu)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_rounded),
+                  onSelected: (value) {
+                    if (value == 'detail') {
+                      _openDetail(context);
+                    } else if (value == 'edit') {
+                      onEdit();
+                    } else if (value == 'delete') {
+                      onDelete();
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'detail',
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline_rounded),
+                          SizedBox(width: 8),
+                          Text('Chi tiết'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_rounded),
+                          SizedBox(width: 8),
+                          Text('Sửa'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_rounded, color: AppTheme.danger),
+                          SizedBox(width: 8),
+                          Text('Xóa', style: TextStyle(color: AppTheme.danger)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          trailing: PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'detail') {
-                _openDetail(context);
-              }
-
-              if (value == 'edit') {
-                onEdit();
-              }
-
-              if (value == 'delete') {
-                onDelete();
-              }
-            },
-            itemBuilder: (context) {
-              return const [
-                PopupMenuItem(
-                  value: 'detail',
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_rounded),
-                      SizedBox(width: 8),
-                      Text('Chi tiết'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_rounded),
-                      SizedBox(width: 8),
-                      Text('Sửa'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_rounded),
-                      SizedBox(width: 8),
-                      Text('Xóa'),
-                    ],
-                  ),
-                ),
-              ];
-            },
-          ),
         ),
-      ),
-    );
-  }
-}
-
-class _TypeBadge extends StatelessWidget {
-  final TaskModel task;
-
-  const _TypeBadge({
-    required this.task,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isLocation = task.isLocationTask;
-    final color = isLocation ? AppTheme.secondary : AppTheme.primary;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Icon(
-        isLocation ? Icons.place_rounded : Icons.task_alt_rounded,
-        size: 15,
-        color: color,
-      ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _InfoChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final safeLabel = label.trim().isEmpty ? 'Không rõ' : label.trim();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 6,
-      ),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              safeLabel,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: color,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
