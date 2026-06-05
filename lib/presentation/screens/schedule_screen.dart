@@ -307,6 +307,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen>
       ),
       floatingActionButton: _tabController.index == 1
           ? FloatingActionButton.extended(
+              heroTag: 'schedule_fab',
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(

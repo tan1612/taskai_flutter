@@ -104,6 +104,7 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'home_fab',
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const TaskFormScreen()),

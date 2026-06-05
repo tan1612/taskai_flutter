@@ -50,6 +50,7 @@ class _TaskListScreenState extends ConsumerState<TaskListScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'task_list_fab',
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const TaskFormScreen()),

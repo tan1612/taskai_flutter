@@ -295,13 +295,13 @@ class NotificationService {
             'Thời gian di chuyển khoảng ${task.travelMinutes} phút.'
         : 'Task demo: ${task.title}';
 
-    final scheduledTime = DateTime.now().add(const Duration(seconds: 10));
+    final scheduledTime = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
 
     await _plugin.zonedSchedule(
       _safeNotificationId(task.id),
       title,
       body,
-      tz.TZDateTime.from(scheduledTime, tz.local),
+      scheduledTime,
       _notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
