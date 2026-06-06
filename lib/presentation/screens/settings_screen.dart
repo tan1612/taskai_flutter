@@ -182,15 +182,6 @@ class SettingsScreen extends ConsumerWidget {
               onTap: () => _testWeeklyNotification(context, ref),
             ),
           ),
-          const SizedBox(height: 12),
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(18),
-              child: Text(
-                'API key được lưu trong file .env: GEMINI/GROQ API key và OPENWEATHER_API_KEY.',
-              ),
-            ),
-          ),
         ],
       ),
     );
