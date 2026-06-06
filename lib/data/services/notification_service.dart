@@ -347,21 +347,23 @@ class NotificationService {
             'Thời gian di chuyển khoảng ${task.travelMinutes} phút.'
         : 'Task demo: ${task.title}';
 
-    final scheduledTime = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+    // Sử dụng Future.delayed để hiển thị thông báo thử nhằm tránh giới hạn của iOS/TrollStore đối với zonedSchedule
+    Future.delayed(const Duration(seconds: 10), () async {
+      try {
+        await _plugin.show(
+          _safeNotificationId(task.id),
+          title,
+          body,
+          _notificationDetails,
+          payload: task.id,
+        );
+        debugPrint('=== DEMO ALARM ===: Đã hiển thị thông báo thử cho task "${task.title}".');
+      } catch (e) {
+        debugPrint('Lỗi hiển thị thông báo thử: $e');
+      }
+    });
 
-    await _plugin.zonedSchedule(
-      _safeNotificationId(task.id),
-      title,
-      body,
-      scheduledTime,
-      _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: task.id,
-    );
-
-    debugPrint('Đã đặt demo notification thật sau 10 giây cho task "${task.title}".');
+    debugPrint('Đã hẹn giờ hiển thị thông báo thử sau 10 giây cho task "${task.title}".');
   }
 
   Future<void> cancelTaskReminder(String taskId) async {
@@ -408,20 +410,22 @@ class NotificationService {
       throw Exception('Quyền thông báo chưa được cấp. Vui lòng mở cài đặt thiết bị để cho phép thông báo.');
     }
 
-    final scheduledTime = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
+    // Sử dụng Future.delayed để hiển thị thông báo thử nhằm tránh giới hạn của iOS/TrollStore đối với zonedSchedule
+    Future.delayed(const Duration(seconds: 10), () async {
+      try {
+        await _plugin.show(
+          10003, // Unique test ID
+          'TaskAI Pro: Lên lịch tuần mới (Test)',
+          'Đã đến lúc cập nhật và sắp xếp công việc cho tuần tới rồi bạn ơi! 🚀 (Thông báo thử)',
+          _notificationDetails,
+        );
+        debugPrint('=== WEEKLY REMINDER TEST ===: Đã hiển thị thông báo thử.');
+      } catch (e) {
+        debugPrint('Lỗi hiển thị thông báo thử: $e');
+      }
+    });
 
-    await _plugin.zonedSchedule(
-      10003, // Unique test ID
-      'TaskAI Pro: Lên lịch tuần mới (Test)',
-      'Đã đến lúc cập nhật và sắp xếp công việc cho tuần tới rồi bạn ơi! 🚀 (Thông báo thử)',
-      scheduledTime,
-      _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
-
-    debugPrint('=== WEEKLY REMINDER TEST ===: Đã đặt lịch nhắc test sau 10 giây.');
+    debugPrint('=== WEEKLY REMINDER TEST ===: Đã hẹn giờ hiển thị thông báo test sau 10 giây.');
   }
 
   tz.TZDateTime _nextInstanceOfSundaySevenPM() {
@@ -505,22 +509,24 @@ class NotificationService {
       throw Exception('Quyền thông báo chưa được cấp. Vui lòng mở cài đặt thiết bị để cho phép thông báo.');
     }
 
-    final scheduledTime = tz.TZDateTime.now(tz.local).add(const Duration(seconds: 10));
-
     final notifId = 30000 + _safeNotificationId(slot.id);
 
-    await _plugin.zonedSchedule(
-      notifId,
-      'Sắp đến giờ học: ${slot.subjectName} (Test)',
-      'Lớp học diễn ra lúc ${slot.startTimeLabel} tại phòng ${slot.room}. Đừng trễ nhé! 📚 (Thông báo thử)',
-      scheduledTime,
-      _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-    );
+    // Sử dụng Future.delayed để hiển thị thông báo thử nhằm tránh giới hạn của iOS/TrollStore đối với zonedSchedule
+    Future.delayed(const Duration(seconds: 10), () async {
+      try {
+        await _plugin.show(
+          notifId,
+          'Sắp đến giờ học: ${slot.subjectName} (Test)',
+          'Lớp học diễn ra lúc ${slot.startTimeLabel} tại phòng ${slot.room}. Đừng trễ nhé! 📚 (Thông báo thử)',
+          _notificationDetails,
+        );
+        debugPrint('=== TIMETABLE TEST REMINDER ===: Đã hiển thị thông báo thử.');
+      } catch (e) {
+        debugPrint('Lỗi hiển thị thông báo thử: $e');
+      }
+    });
 
-    debugPrint('=== TIMETABLE TEST REMINDER ===: Đã đặt lịch nhắc test 10 giây cho môn "${slot.subjectName}".');
+    debugPrint('=== TIMETABLE TEST REMINDER ===: Đã hẹn giờ hiển thị thông báo test 10 giây cho môn "${slot.subjectName}".');
   }
 
   tz.TZDateTime _nextInstanceOfDayOfWeekAndTime(int dayOfWeek, int hour, int minute) {
