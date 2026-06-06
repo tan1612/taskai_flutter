@@ -96,7 +96,7 @@ class NotificationService {
 
     if (!kIsWeb && Platform.isIOS) {
       final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
+          DarwinFlutterLocalNotificationsPlugin>();
 
       final granted = await iosPlugin?.requestPermissions(
         alert: true,
@@ -134,7 +134,7 @@ class NotificationService {
     }
     if (Platform.isIOS) {
       final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
+          DarwinFlutterLocalNotificationsPlugin>();
       final isGranted = await iosPlugin?.requestPermissions(
         alert: true,
         badge: true,
