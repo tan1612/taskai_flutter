@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 import 'package:taskai/data/models/chat_message.dart';
 import 'package:taskai/data/models/task_model.dart';
+import 'package:taskai/data/models/timetable_slot.dart';
 import 'package:taskai/data/services/api_service.dart';
 
 class GeminiRepository {
@@ -13,16 +14,18 @@ class GeminiRepository {
   Future<String> ask(
     List<ChatMessage> history, {
     List<TaskModel> tasks = const [],
+    List<TimetableSlot> timetableSlots = const [],
     String? weatherContext,
   }) async {
     final apiKey = dotenv.env['GROQ_API_KEY'] ?? '';
     final latestQuestion = history.last.content;
 
     if (apiKey.trim().isEmpty) {
-      return _fallbackAnswer(latestQuestion, tasks, weatherContext);
+      return _fallbackAnswer(latestQuestion, tasks, timetableSlots, weatherContext);
     }
 
     final taskContext = _buildTaskContext(tasks);
+    final timetableContext = _buildTimetableContext(timetableSlots);
     final weatherText = _buildWeatherContext(weatherContext);
 
     final systemPrompt = '''
@@ -30,12 +33,15 @@ Bạn là TaskAI Pro, trợ lý học tập và di chuyển cá nhân thông min
 
 Nhiệm vụ:
 - Tư vấn cách sắp xếp công việc, mức độ ưu tiên dựa trên danh sách task thực tế của người dùng bên dưới.
-- Nếu người dùng hỏi "Hôm nay tôi nên làm gì trước?" hoặc "Lập kế hoạch học tập hôm nay": Hãy phân tích các task của hôm nay, khuyên làm trước các task chưa xong có độ ưu tiên cao (High) hoặc deadline cận kề nhất. Chia nhỏ công việc ra thành 3 bước nhỏ.
+- Tư vấn, đối chiếu lịch học (thời khóa biểu) của người dùng bên dưới khi được hỏi về lịch học hoặc khi lập kế hoạch học tập, sắp xếp lịch trình. Gợi ý lịch học đi kèm phòng học, thứ tự tiết học, giờ bắt đầu và giờ kết thúc môn học.
+- Nếu người dùng hỏi "Hôm nay tôi nên làm gì trước?" hoặc "Lập kế hoạch học tập hôm nay": Hãy phân tích các task và lịch học của hôm nay, khuyên làm trước các task chưa xong có độ ưu tiên cao (High) hoặc deadline cận kề nhất, đồng thời nhắc nhở về các tiết học trong ngày hôm nay. Chia nhỏ công việc ra thành 3 bước nhỏ.
 - Nếu người dùng hỏi "Task nào sắp trễ?": Cảnh báo về các task chưa xong đã quá deadline (trễ hạn) hoặc còn dưới 24h.
 - Nếu người dùng hỏi "Thời tiết có ảnh hưởng gì không?": Liên kết thời tiết hiện tại/dự báo với lịch di chuyển của họ. Cảnh báo mang ô/áo mưa nếu trời mưa, khuyên mang mũ/nước nếu nắng nóng.
-- Trả lời ngắn gọn, có cấu trúc bullet point rõ ràng, thân thiện. Không tự bịa task hoặc thời tiết nếu dữ liệu không có.
+- Trả lời ngắn gọn, có cấu trúc bullet point rõ ràng, thân thiện. Không tự bịa task, lịch học hoặc thời tiết nếu dữ liệu không có.
 
 $weatherText
+
+$timetableContext
 
 $taskContext
 ''';
@@ -71,7 +77,7 @@ $taskContext
           response.data['choices'][0]['message']['content']?.toString();
 
       if (text == null || text.trim().isEmpty) {
-        return _fallbackAnswer(latestQuestion, tasks, weatherContext);
+        return _fallbackAnswer(latestQuestion, tasks, timetableSlots, weatherContext);
       }
 
       return text.trim();
@@ -79,10 +85,10 @@ $taskContext
       print('=== GROQ ERROR ===');
       print('Status: ${e.response?.statusCode}');
       print('Body: ${e.response?.data}');
-      return _fallbackAnswer(latestQuestion, tasks, weatherContext);
+      return _fallbackAnswer(latestQuestion, tasks, timetableSlots, weatherContext);
     } catch (e) {
       print('=== UNKNOWN ERROR: $e ===');
-      return _fallbackAnswer(latestQuestion, tasks, weatherContext);
+      return _fallbackAnswer(latestQuestion, tasks, timetableSlots, weatherContext);
     }
   }
 
@@ -194,9 +200,90 @@ ${weatherContext.trim()}
     return buffer.toString();
   }
 
-  String _fallbackAnswer(String question, List<TaskModel> tasks, String? weatherContext) {
+  String _buildTimetableContext(List<TimetableSlot> slots) {
+    if (slots.isEmpty) {
+      return '=== THỜI KHÓA BIỂU HỌC TẬP ===\nNgười dùng chưa thêm môn học nào vào thời khóa biểu.';
+    }
+
+    final buffer = StringBuffer();
+    buffer.writeln('=== THỜI KHÓA BIỂU HỌC TẬP CỦA NGƯỜI DÙNG ===');
+    buffer.writeln('Tổng số môn học đăng ký: ${slots.length}');
+    buffer.writeln();
+
+    final sortedSlots = List<TimetableSlot>.from(slots)
+      ..sort((a, b) {
+        if (a.dayOfWeek != b.dayOfWeek) {
+          return a.dayOfWeek.compareTo(b.dayOfWeek);
+        }
+        return a.startPeriod.compareTo(b.startPeriod);
+      });
+
+    final daysMap = {
+      1: 'Thứ 2',
+      2: 'Thứ 3',
+      3: 'Thứ 4',
+      4: 'Thứ 5',
+      5: 'Thứ 6',
+      6: 'Thứ 7',
+      7: 'Chủ Nhật',
+    };
+
+    final fmtDate = DateFormat('dd/MM/yyyy');
+
+    for (final slot in sortedSlots) {
+      final dayLabel = daysMap[slot.dayOfWeek] ?? 'Thứ ${slot.dayOfWeek}';
+      buffer.writeln('• Môn học: ${slot.subjectName}');
+      buffer.writeln('  Phòng học: ${slot.room}');
+      buffer.writeln('  Ngày học: $dayLabel');
+      buffer.writeln('  Thời gian: Tiết ${slot.startPeriod} - Tiết ${slot.endPeriod} (${slot.startTimeLabel} - ${slot.endTimeLabel})');
+      buffer.writeln('  Giai đoạn học: Từ ${fmtDate.format(slot.startDate)} đến ${fmtDate.format(slot.endDate)}');
+      buffer.writeln();
+    }
+
+    buffer.writeln('=== HẾT THỜI KHÓA BIỂU ===');
+    return buffer.toString();
+  }
+
+  String _fallbackAnswer(
+    String question,
+    List<TaskModel> tasks,
+    List<TimetableSlot> timetableSlots,
+    String? weatherContext,
+  ) {
     final lower = question.toLowerCase().trim();
     final now = DateTime.now();
+
+    // 0. Ask about class timetable
+    if (lower.contains('học') || lower.contains('thời khóa biểu') || lower.contains('môn') || lower.contains('lớp')) {
+      if (timetableSlots.isEmpty) {
+        return 'Trợ lý đang chạy ở chế độ offline: Bạn chưa thêm môn học nào vào thời khóa biểu học tập.';
+      }
+      final sortedSlots = List<TimetableSlot>.from(timetableSlots)
+        ..sort((a, b) {
+          if (a.dayOfWeek != b.dayOfWeek) {
+            return a.dayOfWeek.compareTo(b.dayOfWeek);
+          }
+          return a.startPeriod.compareTo(b.startPeriod);
+        });
+
+      final daysMap = {
+        1: 'Thứ 2',
+        2: 'Thứ 3',
+        3: 'Thứ 4',
+        4: 'Thứ 5',
+        5: 'Thứ 6',
+        6: 'Thứ 7',
+        7: 'Chủ Nhật',
+      };
+
+      final buffer = StringBuffer();
+      buffer.writeln('Thời khóa biểu của bạn (Chế độ offline):');
+      for (final slot in sortedSlots) {
+        final dayLabel = daysMap[slot.dayOfWeek] ?? 'Thứ ${slot.dayOfWeek}';
+        buffer.writeln('- **${slot.subjectName}** ($dayLabel, Phòng: ${slot.room}, Tiết: ${slot.startPeriod}-${slot.endPeriod} [${slot.startTimeLabel}-${slot.endTimeLabel}])');
+      }
+      return buffer.toString();
+    }
 
     // 1. Ask what to do today
     if (lower.contains('làm gì') || lower.contains('kế hoạch') || lower.contains('gợi ý')) {
@@ -277,6 +364,6 @@ ${weatherContext.trim()}
       return 'Chào bạn! Mình có thể giúp gì cho bạn trong việc quản lý thời gian và thời khóa biểu?';
     }
 
-    return 'Trợ lý TaskAI Pro đang hoạt động ở chế độ offline (mất kết nối mạng hoặc thiếu API key). Bạn có thể hỏi về các công việc hôm nay, công việc trễ hạn, thống kê hoặc thời tiết hiện tại để mình trả lời nhanh nhé.';
+    return 'Trợ lý TaskAI Pro đang hoạt động ở chế độ offline (mất kết nối mạng hoặc thiếu API key). Bạn có thể hỏi về các công việc hôm nay, lịch học thời khóa biểu, công việc trễ hạn, thống kê hoặc thời tiết hiện tại để mình trả lời nhanh nhé.';
   }
 }

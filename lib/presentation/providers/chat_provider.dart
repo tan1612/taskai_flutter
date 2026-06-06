@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskai/data/models/chat_message.dart';
 import 'package:taskai/data/models/task_model.dart';
+import 'package:taskai/data/models/timetable_slot.dart';
 import 'package:taskai/presentation/providers/app_providers.dart';
 import 'package:taskai/presentation/providers/task_provider.dart';
 import 'package:taskai/presentation/providers/weather_provider.dart';
@@ -68,11 +69,13 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
     try {
       final tasks = ref.read(taskProvider);
+      final timetableSlots = ref.read(timetableProvider);
       final weatherContext = await _loadWeatherContext(tasks);
 
       final answer = await ref.read(geminiRepositoryProvider).ask(
             history,
             tasks: tasks,
+            timetableSlots: timetableSlots,
             weatherContext: weatherContext,
           );
 
