@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskai/core/theme/app_theme.dart';
 import 'package:taskai/data/models/task_model.dart';
+import 'package:taskai/presentation/providers/weather_provider.dart';
 import 'package:taskai/presentation/screens/task_detail_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class TaskCard extends StatelessWidget {
+class TaskCard extends ConsumerWidget {
   final TaskModel task;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
@@ -90,7 +92,7 @@ class TaskCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
 
     final titleStyle = TextStyle(
@@ -341,6 +343,42 @@ class TaskCard extends StatelessWidget {
                                   ),
                                 ],
                               ),
+                              if (task.effectiveDestination != 'Điểm đến') ...[
+                                ref.watch(destinationWeatherProvider(task.effectiveDestination)).when(
+                                  data: (weather) => Padding(
+                                    padding: const EdgeInsets.only(top: 6.0),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          _getWeatherIcon(weather.icon),
+                                          size: 14,
+                                          color: scheme.primary,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            'Thời tiết điểm đến: ${weather.temperature.toStringAsFixed(0)}°C, ${weather.description}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: scheme.onSurface.withOpacity(0.8),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  loading: () => const Padding(
+                                    padding: EdgeInsets.only(top: 6.0),
+                                    child: SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(strokeWidth: 1.5),
+                                    ),
+                                  ),
+                                  error: (err, _) => const SizedBox.shrink(),
+                                ),
+                              ],
                               const SizedBox(height: 6),
                               
                               // Departure Time and Start Time
@@ -513,5 +551,16 @@ class TaskCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  IconData _getWeatherIcon(String iconCode) {
+    if (iconCode.startsWith('01')) return Icons.wb_sunny_rounded;
+    if (iconCode.startsWith('02') || iconCode.startsWith('03') || iconCode.startsWith('04')) {
+      return Icons.wb_cloudy_rounded;
+    }
+    if (iconCode.startsWith('09') || iconCode.startsWith('10')) return Icons.umbrella_rounded;
+    if (iconCode.startsWith('11')) return Icons.thunderstorm_rounded;
+    if (iconCode.startsWith('13')) return Icons.ac_unit_rounded;
+    return Icons.filter_drama_rounded;
   }
 }

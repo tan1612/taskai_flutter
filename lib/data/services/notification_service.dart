@@ -6,6 +6,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:hive/hive.dart';
 import 'package:taskai/data/models/task_model.dart';
 import 'package:taskai/data/models/timetable_slot.dart';
+import 'package:taskai/data/repositories/weather_repository.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -180,13 +181,13 @@ class NotificationService {
     debugPrint('Đã gọi showTestNotification.');
   }
 
-  Future<void> scheduleTaskReminder(TaskModel task) async {
+  Future<void> scheduleTaskReminder(TaskModel task, {WeatherRepository? weatherRepository}) async {
     await init();
 
     if (task.isDone) return;
 
     if (task.isLocationTask) {
-      await _scheduleLocationTaskReminder(task);
+      await _scheduleLocationTaskReminder(task, weatherRepository: weatherRepository);
     } else {
       await _scheduleNormalTaskReminder(task);
     }
@@ -233,7 +234,7 @@ class NotificationService {
     );
   }
 
-  Future<void> _scheduleLocationTaskReminder(TaskModel task) async {
+  Future<void> _scheduleLocationTaskReminder(TaskModel task, {WeatherRepository? weatherRepository}) async {
     final reminderMinutes = task.reminderMinutes;
 
     if (reminderMinutes == 0) {
@@ -262,13 +263,54 @@ class NotificationService {
     }
 
     final departureLabel = _formatTime(departureTime);
+    String weatherText = '';
+
+    if (weatherRepository != null && task.effectiveDestination != 'Điểm đến') {
+      try {
+        final forecast = await weatherRepository.getForecastWeather(city: task.effectiveDestination);
+        final targetTime = task.startTime ?? task.deadline;
+        final closestItem = forecast.nearestTo(targetTime);
+
+        if (closestItem != null) {
+          final diff = closestItem.time.difference(targetTime).abs();
+          // Nếu mốc dự báo gần nhất nằm trong vòng 12 tiếng
+          if (diff.inHours < 12) {
+            final temp = closestItem.temperature.round();
+            final desc = closestItem.description;
+
+            // Phân tích điều kiện để đưa ra gợi ý di chuyển tốt nhất
+            String recommendation = 'Thời tiết thuận tiện cho việc di chuyển.';
+            final lowerDesc = desc.toLowerCase();
+            if (lowerDesc.contains('mưa') || lowerDesc.contains('dông') || lowerDesc.contains('phùn')) {
+              recommendation = 'Có mưa, nên mang theo ô/áo mưa và đi chậm cẩn thận!';
+            } else if (closestItem.temperature > 33) {
+              recommendation = 'Trời nắng nóng gay gắt, mang theo nước uống và mũ nón!';
+            } else if (closestItem.windSpeed > 8) {
+              recommendation = 'Gió mạnh, chú ý lái xe vững tay lái!';
+            } else if (lowerDesc.contains('nắng') || lowerDesc.contains('quang') || lowerDesc.contains('đẹp')) {
+              recommendation = 'Trời nắng ráo, rất thích hợp để di chuyển.';
+            }
+
+            weatherText = '\nDự báo thời tiết tại ${task.effectiveDestination}: ${temp}°C, $desc. Gợi ý: $recommendation';
+          }
+        }
+      } catch (e) {
+        debugPrint('Không thể lấy thời tiết dự báo cho thông báo di chuyển: $e');
+      }
+    }
+
+    String body = 'Bạn nên đi lúc $departureLabel. '
+        'Từ ${task.effectiveOrigin} đến ${task.effectiveDestination} '
+        'khoảng ${task.travelMinutes} phút.';
+        
+    if (weatherText.isNotEmpty) {
+      body += weatherText;
+    }
 
     await _plugin.zonedSchedule(
       _safeNotificationId(task.id),
       'TaskAI nhắc di chuyển',
-      'Bạn nên đi lúc $departureLabel. '
-          'Từ ${task.effectiveOrigin} đến ${task.effectiveDestination} '
-          'khoảng ${task.travelMinutes} phút.',
+      body,
       tz.TZDateTime.from(notifyTime, tz.local),
       _notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,

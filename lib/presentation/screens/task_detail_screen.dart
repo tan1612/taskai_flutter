@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskai/data/models/task_model.dart';
+import 'package:taskai/presentation/providers/weather_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class TaskDetailScreen extends StatelessWidget {
+class TaskDetailScreen extends ConsumerWidget {
   final TaskModel task;
 
   const TaskDetailScreen({
@@ -88,7 +90,7 @@ class TaskDetailScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isLocationTask = task.isLocationTask;
     final scheme = Theme.of(context).colorScheme;
 
@@ -214,6 +216,152 @@ class TaskDetailScreen extends StatelessWidget {
                 ),
               ],
             ),
+            if (task.effectiveDestination != 'Điểm đến') ...[
+              const SizedBox(height: 12),
+              ref.watch(destinationWeatherProvider(task.effectiveDestination)).when(
+                data: (weather) {
+                  final rec = _getWeatherRecommendation(
+                    weather.temperature,
+                    weather.description,
+                    weather.humidity,
+                    weather.windSpeed,
+                  );
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Thời tiết tại điểm đến',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 17,
+                                  color: scheme.primary,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: scheme.primary.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  weather.cityName,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    color: scheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  color: scheme.primary.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Icon(
+                                  _getWeatherIcon(weather.icon),
+                                  color: scheme.primary,
+                                  size: 34,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${weather.temperature.toStringAsFixed(0)}°C • ${weather.description}',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Độ ẩm: ${weather.humidity}% • Gió: ${weather.windSpeed.toStringAsFixed(1)} m/s',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: scheme.onSurface.withOpacity(0.6),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Divider(color: scheme.outlineVariant.withOpacity(0.5)),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Gợi ý chuẩn bị & di chuyển',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                              color: scheme.onSurface.withOpacity(0.7),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: scheme.primary.withOpacity(0.04),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              rec,
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.5,
+                                fontWeight: FontWeight.w600,
+                                color: scheme.onSurface.withOpacity(0.85),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                loading: () => const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+                ),
+                error: (err, _) => Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Row(
+                      children: [
+                        Icon(Icons.cloud_off_rounded, color: scheme.error),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Không thể tải thông tin thời tiết tại ${task.effectiveDestination}. Vui lòng kiểm tra lại mạng hoặc tên điểm đến.',
+                            style: TextStyle(color: scheme.error, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
             FilledButton.icon(
               onPressed: () => _openGoogleMaps(context),
@@ -264,6 +412,42 @@ class TaskDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  IconData _getWeatherIcon(String iconCode) {
+    if (iconCode.startsWith('01')) return Icons.wb_sunny_rounded;
+    if (iconCode.startsWith('02') || iconCode.startsWith('03') || iconCode.startsWith('04')) {
+      return Icons.wb_cloudy_rounded;
+    }
+    if (iconCode.startsWith('09') || iconCode.startsWith('10')) return Icons.umbrella_rounded;
+    if (iconCode.startsWith('11')) return Icons.thunderstorm_rounded;
+    if (iconCode.startsWith('13')) return Icons.ac_unit_rounded;
+    return Icons.filter_drama_rounded;
+  }
+
+  String _getWeatherRecommendation(double temp, String desc, int humidity, double windSpeed) {
+    final lowerDesc = desc.toLowerCase();
+    String prep = '';
+    String travel = '';
+
+    if (lowerDesc.contains('mưa') || lowerDesc.contains('dông') || lowerDesc.contains('phùn') || lowerDesc.contains('bão')) {
+      prep = 'Mang theo áo mưa hoặc ô (dù), mang giày chống nước.';
+      travel = 'Đường trơn trượt tầm nhìn hạn chế, hãy di chuyển chậm và chú ý quan sát!';
+    } else if (temp > 33) {
+      prep = 'Mặc áo chống nắng, đội mũ, đeo kính râm và mang sẵn chai nước.';
+      travel = 'Trời nắng nóng gay gắt, nên di chuyển bằng phương tiện mát mẻ hoặc tránh khung giờ nắng đỉnh điểm nếu có thể.';
+    } else if (windSpeed > 8) {
+      prep = 'Mặc áo khoác chắn gió, bảo vệ mắt khỏi bụi bẩn.';
+      travel = 'Gió thổi mạnh, cẩn thận rung lắc tay lái, tránh đi gần cây lớn hoặc biển quảng cáo!';
+    } else if (temp < 18) {
+      prep = 'Mặc ấm, quàng khăn len để bảo vệ cổ họng.';
+      travel = 'Thời tiết lạnh ráo, di chuyển chú ý giữ nhiệt cơ thể.';
+    } else {
+      prep = 'Trang phục thoải mái, mang theo một chai nước nhỏ.';
+      travel = 'Thời tiết rất đẹp và mát mẻ, lý tưởng để di chuyển!';
+    }
+
+    return '• Chuẩn bị: $prep\n• Di chuyển: $travel';
   }
 }
 

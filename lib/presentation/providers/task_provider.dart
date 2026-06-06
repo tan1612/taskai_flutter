@@ -266,7 +266,11 @@ class TaskNotifier extends StateNotifier<List<TaskModel>> {
     if (notificationsEnabled || task.reminderMinutes == -1) {
       try {
         await ref.read(notificationServiceProvider).cancelTaskReminder(task.id);
-        await ref.read(notificationServiceProvider).scheduleTaskReminder(task);
+        final weatherRepo = ref.read(weatherRepositoryProvider);
+        await ref.read(notificationServiceProvider).scheduleTaskReminder(
+              task,
+              weatherRepository: weatherRepo,
+            );
       } catch (e) {
         print('Lỗi đặt notification: $e');
       }
