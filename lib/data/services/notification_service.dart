@@ -132,6 +132,16 @@ class NotificationService {
       final isGranted = await androidPlugin?.areNotificationsEnabled() ?? false;
       return isGranted;
     }
+    if (Platform.isIOS) {
+      final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      final isGranted = await iosPlugin?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      ) ?? false;
+      return isGranted;
+    }
     return true;
   }
 
