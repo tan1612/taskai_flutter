@@ -70,17 +70,18 @@ class TimetableGridView extends ConsumerWidget {
     final double totalWidth = _labelWidth + (_columnWidth * 7);
     final double totalHeight = _headerHeight + (_rowHeight * 15);
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.vertical,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Container(
-          width: totalWidth,
-          height: totalHeight,
-          decoration: BoxDecoration(
-            color: scheme.surface,
-          ),
-          child: Stack(
+    return InteractiveViewer(
+      constrained: false,
+      minScale: 0.5,
+      maxScale: 2.0,
+      boundaryMargin: const EdgeInsets.all(40.0),
+      child: Container(
+        width: totalWidth,
+        height: totalHeight,
+        decoration: BoxDecoration(
+          color: scheme.surface,
+        ),
+        child: Stack(
             children: [
               // 1. Vẽ dòng tiêu đề cột (Thứ 2 - CN)
               Positioned(
@@ -321,7 +322,6 @@ class TimetableGridView extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
