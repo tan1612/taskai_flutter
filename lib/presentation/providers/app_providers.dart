@@ -13,6 +13,7 @@ import 'package:taskai/data/repositories/cloud_trip_repository.dart';
 import 'package:taskai/data/repositories/car_repository.dart';
 import 'package:taskai/data/repositories/cloud_car_repository.dart';
 import 'package:taskai/data/repositories/fuel_price_repository.dart';
+import 'package:taskai/data/repositories/daily_log_repository.dart';
 
 // Export để các file khác chỉ cần import app_providers.dart là dùng được hết
 export 'package:taskai/presentation/providers/weather_provider.dart';
@@ -21,6 +22,7 @@ export 'package:taskai/presentation/providers/weather_provider.dart';
 export 'package:taskai/presentation/providers/trip_provider.dart';
 export 'package:taskai/presentation/providers/car_provider.dart';
 export 'package:taskai/presentation/providers/fuel_provider.dart';
+export 'package:taskai/presentation/providers/daily_log_provider.dart';
 
 final hiveServiceProvider = Provider<HiveService>((ref) => HiveService());
 
@@ -56,6 +58,15 @@ final cloudCarRepositoryProvider = Provider<CloudCarRepository>((ref) {
 final fuelPriceRepositoryProvider = Provider<FuelPriceRepository>((ref) {
   final hive = ref.watch(hiveServiceProvider);
   return FuelPriceRepository(hive.fuelPriceBox);
+});
+
+final dailyLogRepositoryProvider = Provider<DailyLogRepository>((ref) {
+  final hive = ref.watch(hiveServiceProvider);
+  return DailyLogRepository(hive.dailyLogBox);
+});
+
+final cloudDailyLogRepositoryProvider = Provider<CloudDailyLogRepository>((ref) {
+  return CloudDailyLogRepository(ref.watch(firestoreProvider));
 });
 
 final weatherRepositoryProvider = Provider<WeatherRepository>((ref) {

@@ -3,6 +3,7 @@ import 'package:taskai/core/constants/app_constants.dart';
 import 'package:taskai/data/models/trip_model.dart';
 import 'package:taskai/data/models/car_model.dart';
 import 'package:taskai/data/models/fuel_price_model.dart';
+import 'package:taskai/data/models/daily_log_model.dart';
 
 class HiveService {
   static Future<void> init() async {
@@ -18,6 +19,9 @@ class HiveService {
     if (!Hive.isAdapterRegistered(5)) {
       Hive.registerAdapter(FuelPriceModelAdapter());
     }
+    if (!Hive.isAdapterRegistered(7)) {
+      Hive.registerAdapter(DailyLogModelAdapter());
+    }
 
     // Mở settings box lưu cài đặt hệ thống (dark mode, thông báo)
     await Hive.openBox<dynamic>(AppConstants.settingsBox);
@@ -26,6 +30,7 @@ class HiveService {
     await Hive.openBox<TripModel>(AppConstants.tripBox);
     await Hive.openBox<CarModel>(AppConstants.carBox);
     await Hive.openBox<FuelPriceModel>(AppConstants.fuelPriceBox);
+    await Hive.openBox<DailyLogModel>(AppConstants.dailyLogBox);
   }
 
   Box<dynamic> get settingsBox => Hive.box<dynamic>(AppConstants.settingsBox);
@@ -34,4 +39,5 @@ class HiveService {
   Box<TripModel> get tripBox => Hive.box<TripModel>(AppConstants.tripBox);
   Box<CarModel> get carBox => Hive.box<CarModel>(AppConstants.carBox);
   Box<FuelPriceModel> get fuelPriceBox => Hive.box<FuelPriceModel>(AppConstants.fuelPriceBox);
+  Box<DailyLogModel> get dailyLogBox => Hive.box<DailyLogModel>(AppConstants.dailyLogBox);
 }

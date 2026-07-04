@@ -5,6 +5,7 @@ import 'package:taskai/data/models/chat_message.dart';
 import 'package:taskai/data/models/trip_model.dart';
 import 'package:taskai/data/models/car_model.dart';
 import 'package:taskai/data/models/fuel_price_model.dart';
+import 'package:taskai/data/models/daily_log_model.dart';
 import 'package:taskai/data/services/api_service.dart';
 
 class GeminiRepository {
@@ -18,18 +19,20 @@ class GeminiRepository {
     List<CarModel> cars = const [],
     FuelPriceModel? fuelPrices,
     String? weatherContext,
+    List<DailyLogModel> dailyLogs = const [],
   }) async {
     final apiKey = dotenv.env['GROQ_API_KEY'] ?? '';
     final latestQuestion = history.last.content;
 
     if (apiKey.trim().isEmpty) {
-      return _fallbackAnswer(latestQuestion, trips, cars, fuelPrices, weatherContext);
+      return _fallbackAnswer(latestQuestion, trips, cars, fuelPrices, weatherContext, dailyLogs);
     }
 
     final tripContext = _buildTripContext(trips);
     final carContext = _buildCarContext(cars);
     final fuelContext = _buildFuelContext(fuelPrices);
     final weatherText = _buildWeatherContext(weatherContext);
+    final dailyLogContext = _buildDailyLogContext(dailyLogs);
 
     final systemPrompt = '''
 Bạn là Trợ lý ảo Du Lịch Năm Ái, một trợ lý thông minh và thân thiện chuyên giúp chủ xe quản lý đội xe du lịch (7 chỗ và 16 chỗ) chạy hợp đồng của nhà xe Năm Ái.
@@ -49,6 +52,8 @@ $fuelContext
 $carContext
 
 $tripContext
+
+$dailyLogContext
 ''';
 
     final messages = [
@@ -81,7 +86,7 @@ $tripContext
       final text = response.data['choices'][0]['message']['content']?.toString();
 
       if (text == null || text.trim().isEmpty) {
-        return _fallbackAnswer(latestQuestion, trips, cars, fuelPrices, weatherContext);
+        return _fallbackAnswer(latestQuestion, trips, cars, fuelPrices, weatherContext, dailyLogs);
       }
 
       return text.trim();
@@ -89,10 +94,10 @@ $tripContext
       print('=== GROQ ERROR ===');
       print('Status: ${e.response?.statusCode}');
       print('Body: ${e.response?.data}');
-      return _fallbackAnswer(latestQuestion, trips, cars, fuelPrices, weatherContext);
+      return _fallbackAnswer(latestQuestion, trips, cars, fuelPrices, weatherContext, dailyLogs);
     } catch (e) {
       print('=== UNKNOWN ERROR: $e ===');
-      return _fallbackAnswer(latestQuestion, trips, cars, fuelPrices, weatherContext);
+      return _fallbackAnswer(latestQuestion, trips, cars, fuelPrices, weatherContext, dailyLogs);
     }
   }
 
@@ -116,6 +121,25 @@ $tripContext
 - Nguồn: ${fuelPrices.source}
 - Cập nhật lúc: ${fmt.format(fuelPrices.updatedAt)}
 ''';
+  }
+
+  String _buildDailyLogContext(List<DailyLogModel> dailyLogs) {
+    if (dailyLogs.isEmpty) {
+      return '=== NHẬT KÝ TUYẾN HÀNG NGÀY ===\nChưa có nhật ký ghi nhận chạy tuyến hàng ngày.';
+    }
+    final buffer = StringBuffer();
+    buffer.writeln('=== NHẬT KÝ CHẠY TUYẾN HÀNG NGÀY & TÀI CHÍNH THỰC TẾ ===');
+    buffer.writeln('Lưu ý nghiệp vụ: Vé xe 16 chỗ chạy tuyến hàng ngày là 90k/khách. Mỗi ngày chạy 2 vòng gồm 4 lượt: Sáng Vào, Sáng Ra, Chiều Vào, Chiều Ra.');
+    buffer.writeln('Khi xe 16 chỗ đi tour, xe 7 chỗ sẽ tự động chạy thay thế tuyến hàng ngày này.');
+    for (final log in dailyLogs.take(20)) {
+      final dateStr = DateFormat('dd/MM/yyyy').format(log.date);
+      buffer.writeln('- Ngày $dateStr:');
+      buffer.writeln('  • Lượt khách: Sáng Vào (${log.passengerCountMorningIn}), Sáng Ra (${log.passengerCountMorningOut}), Chiều Vào (${log.passengerCountAfternoonIn}), Chiều Ra (${log.passengerCountAfternoonOut}). Tổng: ${log.totalPassengers} khách.');
+      buffer.writeln('  • Doanh thu chạy tuyến: ${log.routeRevenue.toStringAsFixed(0)}đ');
+      buffer.writeln('  • Vốn bỏ ra hôm đó: ${log.capital.toStringAsFixed(0)}đ');
+      buffer.writeln('  • Tiền dầu đổ thực tế: ${log.actualFuelCost.toStringAsFixed(0)}đ');
+    }
+    return buffer.toString();
   }
 
   String _buildCarContext(List<CarModel> cars) {
@@ -179,6 +203,7 @@ $tripContext
     List<CarModel> cars,
     FuelPriceModel? fuelPrices,
     String? weatherContext,
+    List<DailyLogModel> dailyLogs,
   ) {
     final lower = question.toLowerCase().trim();
     final now = DateTime.now();
@@ -256,6 +281,31 @@ $tripContext
           '- Tổng giá trị chốt: **${totalFinal.toStringAsFixed(0)}đ**\n'
           '- Tổng tiền cọc đã thu: ${totalDeposit.toStringAsFixed(0)}đ\n'
           '- Tổng tiền còn lại cần thu: **${totalRemaining.toStringAsFixed(0)}đ**';
+    }
+
+    // 5. Hỏi về chạy tuyến xe 16 chỗ cố định hàng ngày
+    if (lower.contains('chạy tuyến') || lower.contains('tuyến cố định') || lower.contains('tuyến hàng ngày') || lower.contains('vòng') || lower.contains('khách chạy')) {
+      if (dailyLogs.isEmpty) {
+        return 'Nhật ký chạy tuyến hàng ngày đang trống. Hãy nhập số lượng khách chạy hàng ngày của bạn trên Dashboard!';
+      }
+      final buffer = StringBuffer();
+      buffer.writeln('Báo cáo chạy tuyến hàng ngày xe 16 chỗ (Vé 90.000đ/khách):');
+      double totalRouteRev = 0;
+      double totalCapital = 0;
+      double totalActualFuel = 0;
+      for (final log in dailyLogs.take(5)) {
+        final dateStr = DateFormat('dd/MM/yyyy').format(log.date);
+        buffer.writeln('- Ngày $dateStr: ${log.totalPassengers} khách | Sáng: ${log.passengerCountMorningIn} vào / ${log.passengerCountMorningOut} ra | Chiều: ${log.passengerCountAfternoonIn} vào / ${log.passengerCountAfternoonOut} ra.');
+        buffer.writeln('  • Doanh thu: ${log.routeRevenue.toStringAsFixed(0)}đ | Dầu đổ: ${log.actualFuelCost.toStringAsFixed(0)}đ | Vốn: ${log.capital.toStringAsFixed(0)}đ');
+        totalRouteRev += log.routeRevenue;
+        totalCapital += log.capital;
+        totalActualFuel += log.actualFuelCost;
+      }
+      buffer.writeln('Tổng quan 5 ngày ghi nhận gần nhất:');
+      buffer.writeln('  • Tổng doanh thu chạy tuyến: ${totalRouteRev.toStringAsFixed(0)}đ');
+      buffer.writeln('  • Tổng tiền dầu đã đổ: ${totalActualFuel.toStringAsFixed(0)}đ');
+      buffer.writeln('  • Tổng vốn đã bỏ ra: ${totalCapital.toStringAsFixed(0)}đ');
+      return buffer.toString();
     }
 
     return 'Trợ lý Du Lịch Năm Ái xin chào! Tôi đang chạy ở chế độ offline. Bạn có thể hỏi tôi về:\n'

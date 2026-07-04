@@ -69,6 +69,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final trips = ref.read(tripProvider);
       final cars = ref.read(carProvider);
       final fuelPrices = ref.read(fuelPriceProvider);
+      final dailyLogs = ref.read(dailyLogProvider);
       final weatherContext = await _loadWeatherContext(trips);
 
       final answer = await ref.read(geminiRepositoryProvider).ask(
@@ -77,6 +78,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             cars: cars,
             fuelPrices: fuelPrices,
             weatherContext: weatherContext,
+            dailyLogs: dailyLogs,
           );
 
       final assistantMessage = ChatMessage(

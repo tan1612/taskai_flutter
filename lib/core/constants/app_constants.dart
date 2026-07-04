@@ -8,6 +8,7 @@ class AppConstants {
   static const String tripBox = 'trips';
   static const String carBox = 'cars';
   static const String fuelPriceBox = 'fuel_prices';
+  static const String dailyLogBox = 'daily_logs';
 
   static const String defaultCity = 'Ho Chi Minh City';
 
