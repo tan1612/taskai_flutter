@@ -218,8 +218,6 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 20),
-            const DailyRoutePanel(),
-            const SizedBox(height: 20),
 
             // Chuyến đi tiếp theo
             Text(
@@ -336,6 +334,8 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 20),
+            const DailyRoutePanel(),
             const SizedBox(height: 80), // Chừa khoảng trống cho FAB
           ],
         ),
