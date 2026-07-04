@@ -1,9 +1,13 @@
 class AppConstants {
-  static const String appName = 'TaskAI';
+  static const String appName = 'Du Lịch Năm Ái';
 
   static const String taskBox = 'tasks';
   static const String settingsBox = 'settings';
   static const String timetableBox = 'timetable';
+
+  static const String tripBox = 'trips';
+  static const String carBox = 'cars';
+  static const String fuelPriceBox = 'fuel_prices';
 
   static const String defaultCity = 'Ho Chi Minh City';
 

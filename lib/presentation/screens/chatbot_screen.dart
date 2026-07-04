@@ -106,7 +106,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
           onPressed: _goHome,
         ),
         title: const Text(
-          'Trợ lý AI Chatbot',
+          'Trợ lý ảo Năm Ái',
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
@@ -136,7 +136,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                             SizedBox(width: 10),
-                            Text('TaskAI đang lập kế hoạch...'),
+                            Text('Trợ lý Năm Ái đang tính toán...'),
                           ],
                         ),
                       ),
@@ -149,7 +149,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
             ),
           ),
           
-          // Quick action chips for students
+          // Gợi ý nhanh câu hỏi cho nhà xe du lịch
           Container(
             height: 48,
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -160,13 +160,13 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: [
-                _buildQuickChip('Hôm nay tôi nên làm gì trước?', state),
+                _buildQuickChip('Lịch chạy xe hôm nay?', state),
                 const SizedBox(width: 8),
-                _buildQuickChip('Task nào sắp trễ?', state),
+                _buildQuickChip('Xe nào đang rảnh?', state),
                 const SizedBox(width: 8),
-                _buildQuickChip('Thời tiết hôm nay có ảnh hưởng lịch của tôi không?', state),
+                _buildQuickChip('Báo cáo doanh số?', state),
                 const SizedBox(width: 8),
-                _buildQuickChip('Lập kế hoạch học tập hôm nay', state),
+                _buildQuickChip('Xem giá xăng dầu hôm nay?', state),
               ],
             ),
           ),
@@ -191,7 +191,7 @@ class _ChatbotScreenState extends ConsumerState<ChatbotScreen> {
                       minLines: 1,
                       maxLines: 4,
                       decoration: const InputDecoration(
-                        hintText: 'Hỏi AI cách sắp xếp công việc...',
+                        hintText: 'Nhập câu hỏi cho Trợ lý Năm Ái...',
                       ),
                       onSubmitted: (_) => _send(),
                     ),

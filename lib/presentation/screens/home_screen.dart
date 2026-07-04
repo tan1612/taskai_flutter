@@ -1,100 +1,84 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:taskai/core/theme/app_theme.dart';
-import 'package:taskai/core/utils/date_utils.dart';
-import 'package:taskai/data/models/task_model.dart';
+import 'package:intl/intl.dart';
+import 'package:taskai/data/models/trip_model.dart';
+import 'package:taskai/data/models/car_model.dart';
 import 'package:taskai/data/models/weather_model.dart';
 import 'package:taskai/presentation/providers/auth_provider.dart';
-import 'package:taskai/presentation/providers/task_provider.dart';
+import 'package:taskai/presentation/providers/trip_provider.dart';
+import 'package:taskai/presentation/providers/car_provider.dart';
 import 'package:taskai/presentation/providers/weather_provider.dart';
-import 'package:taskai/presentation/screens/task_form_screen.dart';
-import 'package:taskai/presentation/widgets/task_card.dart';
+import 'package:taskai/presentation/screens/trip_form_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  // Helper to choose smart suggestion based on weather
   String _getWeatherRecommendation(WeatherModel weather) {
     final desc = weather.description.toLowerCase();
     final temp = weather.temperature;
     final wind = weather.windSpeed;
 
     if (desc.contains('mưa') || desc.contains('dông') || desc.contains('phùn')) {
-      return 'Nên mang áo mưa hoặc mang ô che mưa khi ra ngoài! 🌧️';
+      return 'Trời có mưa/dông. Hãy nhắc nhở tài xế lái xe chậm, kiểm tra lốp và gạt mưa! 🌧️';
     }
     if (temp > 33) {
-      return 'Trời nắng nóng gay gắt. Nhớ mang theo nước và kem chống nắng! ☀️';
+      return 'Thời tiết nắng nóng gay gắt. Hãy bật điều hòa xe trước khi đón khách! ☀️';
     }
     if (wind > 8) {
-      return 'Trời có gió mạnh. Hãy cẩn thận khi lái xe di chuyển! 💨';
+      return 'Có gió mạnh ngoài trời. Tài xế cần chú ý vững tay lái khi chạy cao tốc! 💨';
     }
-    return 'Thời tiết hôm nay rất đẹp, thích hợp để học tập và đi lại! 🌟';
+    return 'Thời tiết hôm nay rất tốt, đường xá thuận lợi cho các chuyến đi! 🌟';
   }
 
-  // Find the smartest task to do first: high priority and closest deadline
-  TaskModel? _getSmartRecommendation(List<TaskModel> tasks) {
-    final pending = tasks.where((t) => !t.isDone).toList();
-    if (pending.isEmpty) return null;
-
-    pending.sort((a, b) {
-      // High priority first
-      final pCompare = b.priority.weight.compareTo(a.priority.weight);
-      if (pCompare != 0) return pCompare;
-
-      // Closest deadline first
-      final aTime = a.isLocationTask && a.startTime != null ? a.startTime! : a.deadline;
-      final bTime = b.isLocationTask && b.startTime != null ? b.startTime! : b.deadline;
-      return aTime.compareTo(bTime);
-    });
-
-    return pending.first;
-  }
-
-  // Find the absolute nearest task (over all tasks, not just today)
-  TaskModel? _getNearestTask(List<TaskModel> allTasks) {
-    final pending = allTasks.where((t) => !t.isDone).toList();
-    if (pending.isEmpty) return null;
-
-    pending.sort((a, b) {
-      final aTime = a.isLocationTask && a.startTime != null ? a.startTime! : a.deadline;
-      final bTime = b.isLocationTask && b.startTime != null ? b.startTime! : b.deadline;
-      return aTime.compareTo(bTime);
-    });
-
-    return pending.first;
+  TripModel? _getNextUpcomingTrip(List<TripModel> trips) {
+    final now = DateTime.now();
+    final upcoming = trips.where((t) => t.status != 'cancelled' && t.status != 'completed' && t.startTime.isAfter(now)).toList();
+    if (upcoming.isEmpty) return null;
+    upcoming.sort((a, b) => a.startTime.compareTo(b.startTime));
+    return upcoming.first;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final todayTasks = ref.watch(todayTasksProvider);
-    final allTasks = ref.watch(taskProvider);
+    final trips = ref.watch(tripProvider);
+    final cars = ref.watch(carProvider);
     final weatherAsync = ref.watch(weatherProvider);
-    final forecastAsync = ref.watch(forecastWeatherProvider);
     final authState = ref.watch(authNotifierProvider);
 
-    final done = todayTasks.where((e) => e.isDone).length;
-    final total = todayTasks.length;
-    final percent = total == 0 ? 0.0 : done / total;
+    final now = DateTime.now();
+    final todayTrips = trips.where((t) =>
+        t.startTime.year == now.year &&
+        t.startTime.month == now.month &&
+        t.startTime.day == now.day &&
+        t.status != 'cancelled').toList();
 
-    // Smart recommendations
-    final smartRec = _getSmartRecommendation(todayTasks);
-    final nearestTask = _getNearestTask(allTasks);
+    double expectedRevenueToday = 0;
+    for (final t in todayTrips) {
+      expectedRevenueToday += t.finalPrice;
+    }
+
+    final nextTrip = _getNextUpcomingTrip(trips);
+    final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: 'đ', decimalDigits: 0);
 
     final userName = authState.user != null
         ? (authState.user!.email!.split('@')[0])
-        : 'Sinh Viên';
+        : 'Chủ Xe';
 
     final scheme = Theme.of(context).colorScheme;
+
+    // Lấy thông tin trạng thái 2 xe mặc định
+    final car7 = cars.firstWhere((c) => c.carType == '7_seater', orElse: () => CarModel(id: '', name: 'Xe 7 chỗ', plateNumber: 'Trống', carType: '7_seater', fuelType: 'ron95', fuelConsumptionPer100Km: 9, status: 'free'));
+    final car16 = cars.firstWhere((c) => c.carType == '16_seater', orElse: () => CarModel(id: '', name: 'Xe 16 chỗ', plateNumber: 'Trống', carType: '16_seater', fuelType: 'diesel', fuelConsumptionPer100Km: 11.5, status: 'free'));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'TaskAI Pro',
+          'Du Lịch Năm Ái',
           style: TextStyle(fontWeight: FontWeight.w900, color: scheme.primary),
         ),
         actions: [
           IconButton(
-            tooltip: 'Tải lại dữ liệu',
+            tooltip: 'Tải lại thời tiết',
             onPressed: () {
               ref.invalidate(weatherProvider);
               ref.invalidate(forecastWeatherProvider);
@@ -102,15 +86,6 @@ class HomeScreen extends ConsumerWidget {
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'home_fab',
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const TaskFormScreen()),
-        ),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Tạo task'),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -120,16 +95,155 @@ class HomeScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Welcome & Progress Hero Banner
-            _HeroSummary(
-              userName: userName,
-              total: total,
-              done: done,
-              percent: percent,
+            // Banner chào mừng và doanh thu dự kiến
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [scheme.primary, scheme.secondary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Xin chào, $userName! 👋',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Chào mừng bạn đến với nhà xe Năm Ái',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Số chuyến hôm nay',
+                              style: TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${todayTrips.length} chuyến',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Doanh thu dự kiến',
+                              style: TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              currencyFormat.format(expectedRevenueToday),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 16),
 
-            // Combined Weather Card (Current + Forecast)
+            // Tình trạng 2 loại xe (7 chỗ và 16 chỗ)
+            Text(
+              'Tình trạng đội xe',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: scheme.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _CarStatusCard(
+                    title: 'Xe 7 Chỗ',
+                    name: car7.name,
+                    plate: car7.plateNumber,
+                    status: car7.status,
+                    icon: Icons.directions_car_filled_rounded,
+                    colorScheme: scheme,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _CarStatusCard(
+                    title: 'Xe 16 Chỗ',
+                    name: car16.name,
+                    plate: car16.plateNumber,
+                    status: car16.status,
+                    icon: Icons.airport_shuttle_rounded,
+                    colorScheme: scheme,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // Chuyến đi tiếp theo
+            Text(
+              'Chuyến đi sắp tới tiếp theo',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: scheme.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (nextTrip != null)
+              _NextTripCard(trip: nextTrip, currencyFormat: currencyFormat, colorScheme: scheme)
+            else
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(color: scheme.outlineVariant.withOpacity(0.3)),
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: Text(
+                      'Hiện tại chưa có chuyến đi nào được đặt tiếp theo.',
+                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 20),
+
+            // Thời tiết hiện tại tại khu vực nhà xe
             Card(
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -142,9 +256,9 @@ class HomeScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Thời tiết & Di chuyển',
+                      'Thời tiết & Lộ trình di chuyển',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w900,
                         color: scheme.primary,
                       ),
@@ -154,9 +268,33 @@ class HomeScreen extends ConsumerWidget {
                       data: (weather) => Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildCurrentWeatherRow(context, weather),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    weather.cityName,
+                                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                                  ),
+                                  Text(
+                                    weather.description.toUpperCase(),
+                                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w700),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                '${weather.temperature.toStringAsFixed(1)}°C',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w900,
+                                  color: scheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 12),
-                          // Smart Tip Box
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -183,422 +321,105 @@ class HomeScreen extends ConsumerWidget {
                         ],
                       ),
                       loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (err, _) => Text('Lỗi tải thời tiết hiện tại: $err'),
-                    ),
-                    
-                    // Forecast 3-hour chunks
-                    const SizedBox(height: 16),
-                    Text(
-                      'Dự báo vài giờ tới',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: scheme.onSurface.withOpacity(0.6),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    forecastAsync.when(
-                      data: (forecast) => SizedBox(
-                        height: 90,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: forecast.items.take(6).length,
-                          itemBuilder: (context, idx) {
-                            final item = forecast.items[idx];
-                            return _buildForecastTile(context, item);
-                          },
-                        ),
-                      ),
-                      loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (err, _) => Text('Lỗi tải dự báo: $err'),
+                      error: (err, _) => const Text('Không có dữ liệu thời tiết. Hãy cắm mạng để cập nhật.'),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-
-            // Smart Recommendation: "Việc nên làm trước"
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-                side: BorderSide(color: scheme.outlineVariant.withOpacity(0.3)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.auto_awesome_rounded, color: AppTheme.warning, size: 20),
-                        const SizedBox(width: 6),
-                        const Text(
-                          'Gợi ý thông minh: Việc nên làm trước',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (smartRec != null)
-                      _buildSuggestedTaskCard(context, smartRec, ref)
-                    else
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          '🎉 Tuyệt vời! Bạn không còn công việc nào chưa hoàn thành hôm nay.',
-                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Sắp đến hạn gần nhất
-            if (nearestTask != null && (smartRec == null || nearestTask.id != smartRec.id)) ...[
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  side: BorderSide(color: scheme.outlineVariant.withOpacity(0.3)),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '⏰ Công việc sắp đến hạn gần nhất',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 10),
-                      TaskCard(
-                        task: nearestTask,
-                        onToggle: () => ref.read(taskProvider.notifier).toggleDone(nearestTask),
-                        onEdit: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => TaskFormScreen(task: nearestTask)),
-                        ),
-                        onDelete: () => ref.read(taskProvider.notifier).delete(nearestTask.id),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // Daily Task List header
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Công việc hôm nay',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: scheme.onSurface,
-                    ),
-                  ),
-                ),
-                Text(
-                  AppDateUtils.date(DateTime.now()),
-                  style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Tasks List
-            if (todayTasks.isEmpty)
-              const _EmptyToday()
-            else
-              ...todayTasks.map(
-                (task) => TaskCard(
-                  task: task,
-                  onToggle: () => ref.read(taskProvider.notifier).toggleDone(task),
-                  onEdit: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => TaskFormScreen(task: task),
-                    ),
-                  ),
-                  onDelete: () => ref.read(taskProvider.notifier).delete(task.id),
-                ),
-              ),
-            const SizedBox(height: 80), // spacer for FAB
+            const SizedBox(height: 80), // Chừa khoảng trống cho FAB
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildCurrentWeatherRow(BuildContext context, WeatherModel weather) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: scheme.primary.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Icon(
-            _getWeatherIcon(weather.icon),
-            color: scheme.primary,
-            size: 32,
-          ),
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'home_create_trip',
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const TripFormScreen()),
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${weather.cityName} • ${weather.temperature.toStringAsFixed(0)}°C',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${weather.description[0].toUpperCase()}${weather.description.substring(1)}',
-                style: TextStyle(fontSize: 13, color: scheme.onSurface.withOpacity(0.65), fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Độ ẩm: ${weather.humidity}% • Gió: ${weather.windSpeed.toStringAsFixed(1)} m/s',
-                style: TextStyle(fontSize: 11.5, color: scheme.onSurface.withOpacity(0.5)),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildForecastTile(BuildContext context, ForecastWeatherItem item) {
-    final scheme = Theme.of(context).colorScheme;
-    final hour = '${item.time.hour.toString().padLeft(2, '0')}:00';
-    
-    return Container(
-      width: 72,
-      margin: const EdgeInsets.only(right: 10),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: scheme.outlineVariant.withOpacity(0.2)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            hour,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Icon(_getWeatherIcon(item.icon), size: 20, color: scheme.primary),
-          const SizedBox(height: 4),
-          Text(
-            '${item.temperature.toStringAsFixed(0)}°',
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
-          ),
-        ],
+        icon: const Icon(Icons.add_road_rounded),
+        label: const Text('Thêm chuyến mới'),
       ),
     );
-  }
-
-  IconData _getWeatherIcon(String iconCode) {
-    if (iconCode.startsWith('01')) return Icons.wb_sunny_rounded;
-    if (iconCode.startsWith('02') || iconCode.startsWith('03') || iconCode.startsWith('04')) {
-      return Icons.wb_cloudy_rounded;
-    }
-    if (iconCode.startsWith('09') || iconCode.startsWith('10')) return Icons.umbrella_rounded;
-    if (iconCode.startsWith('11')) return Icons.thunderstorm_rounded;
-    if (iconCode.startsWith('13')) return Icons.ac_unit_rounded;
-    return Icons.filter_drama_rounded;
-  }
-
-  Widget _buildSuggestedTaskCard(BuildContext context, TaskModel task, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    final priorityColor = task.priority == TaskPriority.high
-        ? AppTheme.danger
-        : (task.priority == TaskPriority.medium ? AppTheme.warning : AppTheme.success);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: priorityColor.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: priorityColor.withOpacity(0.2), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: priorityColor,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  task.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                icon: Icon(Icons.check_circle_outline_rounded, color: priorityColor),
-                onPressed: () => ref.read(taskProvider.notifier).toggleDone(task),
-              )
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            task.description.isEmpty ? 'Không có mô tả.' : task.description,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12.5,
-              color: scheme.onSurface.withOpacity(0.65),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(Icons.flag_rounded, size: 14, color: priorityColor),
-              const SizedBox(width: 4),
-              Text(
-                'Độ ưu tiên: ${task.priority.label}',
-                style: TextStyle(fontSize: 11.5, color: priorityColor, fontWeight: FontWeight.w800),
-              ),
-              const Spacer(),
-              Icon(Icons.access_time_rounded, size: 14, color: scheme.primary),
-              const SizedBox(width: 4),
-              Text(
-                task.isLocationTask && task.startTime != null
-                    ? 'Xuất phát lúc: ${_formatTime(task.departureTime!)}'
-                    : 'Hạn chót: ${AppDateUtils.dateTime(task.deadline)}',
-                style: TextStyle(fontSize: 11.5, color: scheme.primary, fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatTime(DateTime val) {
-    return '${val.hour.toString().padLeft(2, '0')}:${val.minute.toString().padLeft(2, '0')}';
   }
 }
 
-class _HeroSummary extends StatelessWidget {
-  final String userName;
-  final int total;
-  final int done;
-  final double percent;
+class _CarStatusCard extends StatelessWidget {
+  final String title;
+  final String name;
+  final String plate;
+  final String status;
+  final IconData icon;
+  final ColorScheme colorScheme;
 
-  const _HeroSummary({
-    required this.userName,
-    required this.total,
-    required this.done,
-    required this.percent,
+  const _CarStatusCard({
+    required this.title,
+    required this.name,
+    required this.plate,
+    required this.status,
+    required this.icon,
+    required this.colorScheme,
   });
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    Color statusColor;
+    String statusText;
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          colors: [
-            scheme.primary.withValues(alpha: 0.95),
-            scheme.secondary.withValues(alpha: 0.85),
-          ],
-        ),
+    if (status == 'free') {
+      statusColor = Colors.green;
+      statusText = 'Rảnh';
+    } else if (status == 'busy') {
+      statusColor = Colors.red;
+      statusText = 'Bận chạy';
+    } else {
+      statusColor = Colors.amber;
+      statusText = 'Bảo trì';
+    }
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.3)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Chào $userName 👋',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    total == 0
-                        ? 'Bạn chưa có việc nào trong hôm nay.'
-                        : 'Bạn đã hoàn thành $done/$total công việc hôm nay.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.white.withOpacity(0.9),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: percent,
-                      minHeight: 8,
-                      backgroundColor: Colors.white.withOpacity(0.25),
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 20),
-            // Circular progress indicator
-            Stack(
-              alignment: Alignment.center,
+            Row(
               children: [
-                SizedBox(
-                  width: 68,
-                  height: 68,
-                  child: CircularProgressIndicator(
-                    value: percent,
-                    strokeWidth: 8,
-                    strokeCap: StrokeCap.round,
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ),
+                Icon(icon, color: colorScheme.primary, size: 24),
+                const SizedBox(width: 8),
                 Text(
-                  '${(percent * 100).round()}%',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                  ),
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              name,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              plate,
+              style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                statusText,
+                style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
+              ),
             ),
           ],
         ),
@@ -607,41 +428,102 @@ class _HeroSummary extends StatelessWidget {
   }
 }
 
-class _EmptyToday extends StatelessWidget {
-  const _EmptyToday();
+class _NextTripCard extends StatelessWidget {
+  final TripModel trip;
+  final NumberFormat currencyFormat;
+  final ColorScheme colorScheme;
+
+  const _NextTripCard({
+    required this.trip,
+    required this.currencyFormat,
+    required this.colorScheme,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final dateStr = DateFormat('dd/MM/yyyy HH:mm').format(trip.startTime);
+    final carLabel = trip.carType == '7_seater' ? 'Xe 7 chỗ' : 'Xe 16 chỗ';
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: scheme.outlineVariant.withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.3)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+        padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(
-              Icons.task_alt_rounded,
-              size: 64,
-              color: scheme.primary.withOpacity(0.8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  dateStr,
+                  style: TextStyle(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    carLabel,
+                    style: TextStyle(
+                      color: colorScheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            const Text(
-              'Hôm nay chưa có task nào',
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            const Divider(height: 24),
+            Row(
+              children: [
+                Icon(Icons.person_pin_rounded, color: colorScheme.onSurfaceVariant, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Khách hàng: ${trip.customerName}',
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Tạo một công việc mới để TaskAI nhắc nhở bạn đúng hạn.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: scheme.onSurface.withOpacity(0.6),
-              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.location_on_rounded, color: Colors.green, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Lộ trình: ${trip.pickupLocation} ➔ ${trip.destination}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Giá chốt: ${currencyFormat.format(trip.finalPrice)}',
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.redAccent),
+                ),
+                Text(
+                  'Đặt cọc: ${currencyFormat.format(trip.deposit)}',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.green),
+                ),
+              ],
             ),
           ],
         ),

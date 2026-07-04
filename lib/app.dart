@@ -7,10 +7,10 @@ import 'package:taskai/presentation/providers/auth_provider.dart';
 import 'package:taskai/presentation/screens/auth/login_screen.dart';
 import 'package:taskai/presentation/screens/chatbot_screen.dart';
 import 'package:taskai/presentation/screens/home_screen.dart';
-import 'package:taskai/presentation/screens/schedule_screen.dart';
 import 'package:taskai/presentation/screens/settings_screen.dart';
-import 'package:taskai/presentation/screens/stats_screen.dart';
-import 'package:taskai/presentation/screens/task_list_screen.dart';
+import 'package:taskai/presentation/screens/trip_list_screen.dart';
+import 'package:taskai/presentation/screens/car_list_screen.dart';
+import 'package:taskai/presentation/screens/fuel_price_screen.dart';
 
 class TaskAIApp extends ConsumerWidget {
   const TaskAIApp({super.key});
@@ -76,11 +76,12 @@ class _MainShellState extends State<MainShell> {
       _isInitialized = true;
     }
 
+    // 5 màn hình tương ứng với 5 tab quản lý xe du lịch Năm Ái
     final screens = [
       const HomeScreen(),
-      const TaskListScreen(),
-      const ScheduleScreen(),
-      const StatsScreen(),
+      const TripListScreen(),
+      const CarListScreen(),
+      const FuelPriceScreen(),
       const SettingsScreen(),
     ];
 
@@ -94,7 +95,7 @@ class _MainShellState extends State<MainShell> {
             children: screens,
           ),
           
-          // Draggable Chathead
+          // Draggable Chathead Trợ lý ảo AI
           AnimatedPositioned(
             duration: _isDragging ? Duration.zero : const Duration(milliseconds: 300),
             curve: Curves.easeOutBack,
@@ -111,7 +112,6 @@ class _MainShellState extends State<MainShell> {
                 setState(() {
                   _posX += details.delta.dx;
                   _posY += details.delta.dy;
-                  // Restrict coordinates inside screen boundaries
                   _posX = _posX.clamp(0.0, currentSize.width - 60.0);
                   _posY = _posY.clamp(100.0, currentSize.height - 180.0);
                 });
@@ -120,7 +120,6 @@ class _MainShellState extends State<MainShell> {
                 final currentSize = MediaQuery.of(context).size;
                 setState(() {
                   _isDragging = false;
-                  // Snap to nearest side (left or right)
                   if (_posX + 30.0 < currentSize.width / 2) {
                     _posX = 16.0;
                   } else {
@@ -162,13 +161,11 @@ class _MainShellState extends State<MainShell> {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // AI Robot Icon
                       const Icon(
                         Icons.smart_toy_rounded,
                         color: Colors.white,
                         size: 32,
                       ),
-                      // Green Online Dot indicator
                       Positioned(
                         right: 2,
                         top: 2,
@@ -201,19 +198,19 @@ class _MainShellState extends State<MainShell> {
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_rounded),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.checklist_rounded),
-            label: 'Task',
+            label: 'Trang chủ',
           ),
           NavigationDestination(
             icon: Icon(Icons.calendar_month_rounded),
-            label: 'Lịch',
+            label: 'Lịch xe',
           ),
           NavigationDestination(
-            icon: Icon(Icons.bar_chart_rounded),
-            label: 'Thống kê',
+            icon: Icon(Icons.directions_car_filled_rounded),
+            label: 'Đội xe',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.local_gas_station_rounded),
+            label: 'Nhiên liệu',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_rounded),

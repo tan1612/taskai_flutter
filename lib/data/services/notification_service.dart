@@ -4,9 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:hive/hive.dart';
-import 'package:taskai/data/models/task_model.dart';
-import 'package:taskai/data/models/timetable_slot.dart';
-import 'package:taskai/data/repositories/weather_repository.dart';
+import 'package:taskai/data/models/trip_model.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -22,70 +20,54 @@ class NotificationService {
 
   bool _initialized = false;
 
-  static const String _channelId = 'taskai_deadline_channel';
-  static const String _channelName = 'TaskAI Reminders';
+  static const String _channelId = 'namai_trip_channel';
+  static const String _channelName = 'Năm Ái Reminders';
   static const String _channelDescription =
-      'Thông báo nhắc công việc và lịch di chuyển';
+      'Thông báo nhắc lịch chạy xe du lịch';
 
   Future<void> init() async {
     if (_initialized) return;
 
+    // Cài đặt múi giờ địa phương
     tz.initializeTimeZones();
-
-    // Lấy múi giờ hệ thống để tránh lệch giờ khi lên lịch định kỳ
     try {
-      final timeZoneInfo = await FlutterTimezone.getLocalTimezone();
-      final String timeZoneName = timeZoneInfo.identifier;
+      final String timeZoneName = (await FlutterTimezone.getLocalTimezone()).toString();
       tz.setLocalLocation(tz.getLocation(timeZoneName));
-      debugPrint('Đã cấu hình múi giờ hệ thống: $timeZoneName');
     } catch (e) {
-      debugPrint('Lỗi lấy múi giờ hệ thống, sử dụng Asia/Ho_Chi_Minh làm mặc định: $e');
+      debugPrint('Không cấu hình được múi giờ qua FlutterTimezone, dùng default Asia/Ho_Chi_Minh: $e');
       try {
         tz.setLocalLocation(tz.getLocation('Asia/Ho_Chi_Minh'));
-      } catch (ex) {
-        debugPrint('Không thể đặt Asia/Ho_Chi_Minh: $ex');
-      }
+      } catch (_) {}
     }
 
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    const ios = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-      defaultPresentAlert: true,
-      defaultPresentBadge: true,
-      defaultPresentSound: true,
+    const DarwinInitializationSettings initializationSettingsDarwin =
+        DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsDarwin,
     );
 
     await _plugin.initialize(
-      const InitializationSettings(
-        android: android,
-        iOS: ios,
-      ),
-      onDidReceiveNotificationResponse: (response) {
-        debugPrint('Notification tapped: ${response.payload}');
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        debugPrint('Người dùng bấm vào thông báo: ${response.payload}');
       },
     );
 
+    // Tạo kênh Android nếu là Android
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
 
-    try {
-      final granted = await androidPlugin?.requestNotificationsPermission();
-      debugPrint('=== NOTIFICATION ===: Quyền thông báo Android: $granted');
-    } catch (e) {
-      debugPrint('=== NOTIFICATION ===: Lỗi yêu cầu quyền thông báo: $e');
-    }
-
-    try {
-      final grantedExact = await androidPlugin?.requestExactAlarmsPermission();
-      debugPrint('=== NOTIFICATION ===: Quyền exact alarm Android: $grantedExact');
-    } catch (e) {
-      debugPrint('=== NOTIFICATION ===: Lỗi yêu cầu quyền exact alarm: $e');
-    }
-
-    const channel = AndroidNotificationChannel(
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
       _channelId,
       _channelName,
       description: _channelDescription,
@@ -96,7 +78,7 @@ class NotificationService {
 
     if (!kIsWeb && Platform.isIOS) {
       final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
-          DarwinFlutterLocalNotificationsPlugin>();
+          IOSFlutterLocalNotificationsPlugin>();
 
       final granted = await iosPlugin?.requestPermissions(
         alert: true,
@@ -112,15 +94,13 @@ class NotificationService {
     // Kiểm tra cài đặt và đặt/hủy lịch nhắc nhở Chủ nhật 19:00
     try {
       final weeklyEnabled = Hive.isBoxOpen('settings')
-          ? (Hive.box('settings').get('weeklyReminderEnabled') as bool? ?? true)
+          ? Hive.box('settings').get('weeklyReminderEnabled') as bool? ?? true
           : true;
       if (weeklyEnabled) {
         await scheduleWeeklySundayReminder();
-      } else {
-        await cancelWeeklySundayReminder();
       }
     } catch (e) {
-      debugPrint('Lỗi cấu hình nhắc nhở hàng tuần: $e');
+      debugPrint('Lỗi tự động đặt nhắc nhở hàng tuần lúc khởi tạo: $e');
     }
   }
 
@@ -134,7 +114,7 @@ class NotificationService {
     }
     if (Platform.isIOS) {
       final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
-          DarwinFlutterLocalNotificationsPlugin>();
+          IOSFlutterLocalNotificationsPlugin>();
       final isGranted = await iosPlugin?.requestPermissions(
         alert: true,
         badge: true,
@@ -153,7 +133,7 @@ class NotificationService {
         channelDescription: _channelDescription,
         importance: Importance.max,
         priority: Priority.max,
-        ticker: 'TaskAI',
+        ticker: 'Du Lịch Năm Ái',
         playSound: true,
         enableVibration: true,
       ),
@@ -182,7 +162,7 @@ class NotificationService {
 
     await _plugin.show(
       10001,
-      'TaskAI thông báo thử',
+      'Du Lịch Năm Ái thông báo thử',
       'Nếu bạn thấy thông báo này thì notification đã hoạt động.',
       _notificationDetails,
       payload: 'test',
@@ -191,191 +171,42 @@ class NotificationService {
     debugPrint('Đã gọi showTestNotification.');
   }
 
-  Future<void> scheduleTaskReminder(TaskModel task, {WeatherRepository? weatherRepository}) async {
+  Future<void> scheduleTripReminder(TripModel trip) async {
     await init();
 
-    if (task.isDone) return;
-
-    if (task.isLocationTask) {
-      await _scheduleLocationTaskReminder(task, weatherRepository: weatherRepository);
-    } else {
-      await _scheduleNormalTaskReminder(task);
-    }
-  }
-
-  Future<void> _scheduleNormalTaskReminder(TaskModel task) async {
-    final reminderMinutes = task.reminderMinutes;
-
-    if (reminderMinutes == 0) {
-      debugPrint('Task "${task.title}" không bật nhắc deadline.');
+    if (trip.status == 'cancelled' || trip.status == 'completed') {
+      await cancelTripReminder(trip.id);
       return;
     }
 
-    if (reminderMinutes == -1) {
-      await _scheduleDemoAfter10Seconds(task);
-      return;
-    }
-
-    final scheduledTime = task.deadline.subtract(
-      Duration(minutes: reminderMinutes),
-    );
-
-    if (scheduledTime.isBefore(DateTime.now())) {
-      debugPrint(
-        'Không đặt notification cho "${task.title}" vì thời gian nhắc đã qua.',
-      );
-      return;
-    }
-
-    await _plugin.zonedSchedule(
-      _safeNotificationId(task.id),
-      'TaskAI nhắc deadline',
-      'Còn $reminderMinutes phút đến deadline: ${task.title}',
-      tz.TZDateTime.from(scheduledTime, tz.local),
-      _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: task.id,
-    );
-
-    debugPrint(
-      'Đã đặt notification deadline cho "${task.title}" trước $reminderMinutes phút.',
-    );
-  }
-
-  Future<void> _scheduleLocationTaskReminder(TaskModel task, {WeatherRepository? weatherRepository}) async {
-    final reminderMinutes = task.reminderMinutes;
-
-    if (reminderMinutes == 0) {
-      debugPrint('Task "${task.title}" không bật nhắc di chuyển.');
-      return;
-    }
-
-    if (reminderMinutes == -1) {
-      await _scheduleDemoAfter10Seconds(task);
-      return;
-    }
-
-    final departureTime = task.departureTime;
-    final notifyTime = task.departureNotificationTime;
-
-    if (departureTime == null || notifyTime == null) {
-      debugPrint('Không đặt notification cho "${task.title}" vì thiếu giờ bắt đầu.');
-      return;
-    }
-
+    final notifyTime = trip.startTime.subtract(const Duration(hours: 1)); // Nhắc trước 1 tiếng
     if (notifyTime.isBefore(DateTime.now())) {
-      debugPrint(
-        'Không đặt notification cho "${task.title}" vì thời gian nhắc đã qua.',
-      );
+      debugPrint('Không đặt notification nhắc chuyến "${trip.customerName}" vì thời gian nhắc đã qua.');
       return;
     }
 
-    final departureLabel = _formatTime(departureTime);
-    String weatherText = '';
-
-    if (weatherRepository != null && task.effectiveDestination != 'Điểm đến') {
-      try {
-        final forecast = await weatherRepository.getForecastWeather(city: task.effectiveDestination);
-        final targetTime = task.startTime ?? task.deadline;
-        final closestItem = forecast.nearestTo(targetTime);
-
-        if (closestItem != null) {
-          final diff = closestItem.time.difference(targetTime).abs();
-          // Nếu mốc dự báo gần nhất nằm trong vòng 12 tiếng
-          if (diff.inHours < 12) {
-            final temp = closestItem.temperature.round();
-            final desc = closestItem.description;
-
-            // Phân tích điều kiện để đưa ra gợi ý di chuyển tốt nhất
-            String recommendation = 'Thời tiết thuận tiện cho việc di chuyển.';
-            final lowerDesc = desc.toLowerCase();
-            if (lowerDesc.contains('mưa') || lowerDesc.contains('dông') || lowerDesc.contains('phùn')) {
-              recommendation = 'Có mưa, nên mang theo ô/áo mưa và đi chậm cẩn thận!';
-            } else if (closestItem.temperature > 33) {
-              recommendation = 'Trời nắng nóng gay gắt, mang theo nước uống và mũ nón!';
-            } else if (closestItem.windSpeed > 8) {
-              recommendation = 'Gió mạnh, chú ý lái xe vững tay lái!';
-            } else if (lowerDesc.contains('nắng') || lowerDesc.contains('quang') || lowerDesc.contains('đẹp')) {
-              recommendation = 'Trời nắng ráo, rất thích hợp để di chuyển.';
-            }
-
-            weatherText = '\nDự báo thời tiết tại ${task.effectiveDestination}: ${temp}°C, $desc. Gợi ý: $recommendation';
-          }
-        }
-      } catch (e) {
-        debugPrint('Không thể lấy thời tiết dự báo cho thông báo di chuyển: $e');
-      }
-    }
-
-    String body = 'Bạn nên đi lúc $departureLabel. '
-        'Từ ${task.effectiveOrigin} đến ${task.effectiveDestination} '
-        'khoảng ${task.travelMinutes} phút.';
-        
-    if (weatherText.isNotEmpty) {
-      body += weatherText;
-    }
+    final carTypeLabel = trip.carType == '7_seater' ? 'xe 7 chỗ' : 'xe 16 chỗ';
+    final body = 'Đón khách ${trip.customerName} tại ${trip.pickupLocation} đi ${trip.destination}. Loại xe: $carTypeLabel. Giá chốt: ${trip.finalPrice}đ.';
 
     await _plugin.zonedSchedule(
-      _safeNotificationId(task.id),
-      'TaskAI nhắc di chuyển',
+      _safeNotificationId(trip.id),
+      'Du Lịch Năm Ái: Nhắc lịch chạy xe',
       body,
       tz.TZDateTime.from(notifyTime, tz.local),
       _notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      payload: task.id,
+      payload: trip.id,
     );
 
-    debugPrint(
-      'Đã đặt notification di chuyển cho "${task.title}". '
-      'Xuất phát lúc $departureLabel, nhắc trước ${task.departReminderMinutes} phút.',
-    );
+    debugPrint('Đã đặt lịch nhắc chuyến đi của "${trip.customerName}" trước 1 tiếng.');
   }
 
-  Future<void> _scheduleDemoAfter10Seconds(TaskModel task) async {
+  Future<void> cancelTripReminder(String tripId) async {
     await init();
-
-    final title = task.isLocationTask
-        ? 'TaskAI nhắc di chuyển'
-        : 'TaskAI nhắc deadline';
-
-    final body = task.isLocationTask
-        ? 'Bạn nên đi từ ${task.effectiveOrigin} đến ${task.effectiveDestination}. '
-            'Thời gian di chuyển khoảng ${task.travelMinutes} phút.'
-        : 'Task demo: ${task.title}';
-
-    // Sử dụng Future.delayed để hiển thị thông báo thử nhằm tránh giới hạn của iOS/TrollStore đối với zonedSchedule
-    Future.delayed(const Duration(seconds: 10), () async {
-      try {
-        await _plugin.show(
-          _safeNotificationId(task.id),
-          title,
-          body,
-          _notificationDetails,
-          payload: task.id,
-        );
-        debugPrint('=== DEMO ALARM ===: Đã hiển thị thông báo thử cho task "${task.title}".');
-      } catch (e) {
-        debugPrint('Lỗi hiển thị thông báo thử: $e');
-      }
-    });
-
-    debugPrint('Đã hẹn giờ hiển thị thông báo thử sau 10 giây cho task "${task.title}".');
-  }
-
-  Future<void> cancelTaskReminder(String taskId) async {
-    await init();
-    await _plugin.cancel(_safeNotificationId(taskId));
-  }
-
-  String _formatTime(DateTime value) {
-    final hour = value.hour.toString().padLeft(2, '0');
-    final minute = value.minute.toString().padLeft(2, '0');
-
-    return '$hour:$minute';
+    await _plugin.cancel(_safeNotificationId(tripId));
+    debugPrint('Đã hủy lịch nhắc chuyến đi ID: $tripId.');
   }
 
   Future<void> scheduleWeeklySundayReminder() async {
@@ -383,8 +214,8 @@ class NotificationService {
 
     await _plugin.zonedSchedule(
       10002, // Unique ID for weekly reminder
-      'TaskAI Pro: Lên lịch tuần mới',
-      'Đã đến lúc cập nhật và sắp xếp công việc cho tuần tới rồi bạn ơi! 🚀',
+      'Du Lịch Năm Ái: Lên lịch tuần mới',
+      'Đã đến lúc cập nhật và sắp xếp lịch đặt xe cho tuần tới rồi bạn ơi! 🚀',
       scheduledTime,
       _notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -415,8 +246,8 @@ class NotificationService {
       try {
         await _plugin.show(
           10003, // Unique test ID
-          'TaskAI Pro: Lên lịch tuần mới (Test)',
-          'Đã đến lúc cập nhật và sắp xếp công việc cho tuần tới rồi bạn ơi! 🚀 (Thông báo thử)',
+          'Du Lịch Năm Ái: Lên lịch tuần mới (Test)',
+          'Đã đến lúc cập nhật và sắp xếp lịch đặt xe cho tuần tới rồi bạn ơi! 🚀 (Thông báo thử)',
           _notificationDetails,
         );
         debugPrint('=== WEEKLY REMINDER TEST ===: Đã hiển thị thông báo thử.');
@@ -439,105 +270,6 @@ class NotificationService {
     }
     
     // If it's already past 19:00 on Sunday, schedule for next Sunday
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 7));
-    }
-    
-    return scheduledDate;
-  }
-
-  Future<void> scheduleTimetableSlotReminder(TimetableSlot slot) async {
-    await init();
-
-    final now = DateTime.now();
-    if (now.isAfter(slot.endDate)) {
-      debugPrint('=== TIMETABLE REMINDER ===: Môn "${slot.subjectName}" đã kết thúc vào ${slot.endDate}, không đặt lịch nhắc.');
-      return;
-    }
-
-    final parts = slot.startTimeLabel.split(':');
-    final hour = int.parse(parts[0]);
-    final minute = int.parse(parts[1]);
-
-    final classTimeToday = DateTime(2026, 6, 1, hour, minute);
-    final reminderTimeToday = classTimeToday.subtract(const Duration(hours: 1));
-
-    int targetDayOfWeek = slot.dayOfWeek;
-    if (reminderTimeToday.day != classTimeToday.day) {
-      targetDayOfWeek = slot.dayOfWeek - 1;
-      if (targetDayOfWeek < 1) targetDayOfWeek = 7;
-    }
-
-    final reminderHour = reminderTimeToday.hour;
-    final reminderMinute = reminderTimeToday.minute;
-
-    final scheduledTime = _nextInstanceOfDayOfWeekAndTime(
-      targetDayOfWeek,
-      reminderHour,
-      reminderMinute,
-    );
-
-    final notifId = 20000 + _safeNotificationId(slot.id);
-
-    await _plugin.zonedSchedule(
-      notifId,
-      'Sắp đến giờ học: ${slot.subjectName}',
-      'Lớp học diễn ra lúc ${slot.startTimeLabel} tại phòng ${slot.room}. Đừng trễ nhé! 📚',
-      scheduledTime,
-      _notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-    );
-
-    debugPrint('=== TIMETABLE REMINDER ===: Đã đặt lịch nhắc môn "${slot.subjectName}" trước 1 giờ.');
-  }
-
-  Future<void> cancelTimetableSlotReminder(String slotId) async {
-    await init();
-    final notifId = 20000 + _safeNotificationId(slotId);
-    await _plugin.cancel(notifId);
-    debugPrint('=== TIMETABLE REMINDER ===: Đã hủy lịch nhắc môn ID: $slotId.');
-  }
-
-  Future<void> scheduleTimetableSlotTestAfter10Seconds(TimetableSlot slot) async {
-    await init();
-
-    final hasPermission = await checkPermissions();
-    if (!hasPermission) {
-      throw Exception('Quyền thông báo chưa được cấp. Vui lòng mở cài đặt thiết bị để cho phép thông báo.');
-    }
-
-    final notifId = 30000 + _safeNotificationId(slot.id);
-
-    // Sử dụng Future.delayed để hiển thị thông báo thử nhằm tránh giới hạn của iOS/TrollStore đối với zonedSchedule
-    Future.delayed(const Duration(seconds: 10), () async {
-      try {
-        await _plugin.show(
-          notifId,
-          'Sắp đến giờ học: ${slot.subjectName} (Test)',
-          'Lớp học diễn ra lúc ${slot.startTimeLabel} tại phòng ${slot.room}. Đừng trễ nhé! 📚 (Thông báo thử)',
-          _notificationDetails,
-        );
-        debugPrint('=== TIMETABLE TEST REMINDER ===: Đã hiển thị thông báo thử.');
-      } catch (e) {
-        debugPrint('Lỗi hiển thị thông báo thử: $e');
-      }
-    });
-
-    debugPrint('=== TIMETABLE TEST REMINDER ===: Đã hẹn giờ hiển thị thông báo test 10 giây cho môn "${slot.subjectName}".');
-  }
-
-  tz.TZDateTime _nextInstanceOfDayOfWeekAndTime(int dayOfWeek, int hour, int minute) {
-    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
-    tz.TZDateTime scheduledDate =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    
-    while (scheduledDate.weekday != dayOfWeek) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
-    }
-    
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 7));
     }

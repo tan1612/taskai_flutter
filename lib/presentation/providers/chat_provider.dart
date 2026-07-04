@@ -1,9 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskai/data/models/chat_message.dart';
-import 'package:taskai/data/models/task_model.dart';
-import 'package:taskai/data/models/timetable_slot.dart';
+import 'package:taskai/data/models/trip_model.dart';
 import 'package:taskai/presentation/providers/app_providers.dart';
-import 'package:taskai/presentation/providers/task_provider.dart';
 import 'package:taskai/presentation/providers/weather_provider.dart';
 
 class ChatState {
@@ -23,7 +21,7 @@ class ChatState {
         ChatMessage(
           role: ChatRole.assistant,
           content:
-              'Xin chào! Mình là TaskAI. Bạn có thể hỏi mình cách sắp xếp công việc, chia nhỏ deadline, xem lịch di chuyển hoặc hỏi thời tiết để lên kế hoạch.',
+              'Xin chào! Mình là Trợ lý ảo Du Lịch Năm Ái. Bạn có thể hỏi mình về lịch đón khách hôm nay, tình trạng xe rảnh/bận, dự toán doanh thu, giá xăng dầu hoặc thời tiết để chạy xe nhé.',
           createdAt: DateTime.now(),
         ),
       ],
@@ -68,14 +66,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
     );
 
     try {
-      final tasks = ref.read(taskProvider);
-      final timetableSlots = ref.read(timetableProvider);
-      final weatherContext = await _loadWeatherContext(tasks);
+      final trips = ref.read(tripProvider);
+      final cars = ref.read(carProvider);
+      final fuelPrices = ref.read(fuelPriceProvider);
+      final weatherContext = await _loadWeatherContext(trips);
 
       final answer = await ref.read(geminiRepositoryProvider).ask(
             history,
-            tasks: tasks,
-            timetableSlots: timetableSlots,
+            trips: trips,
+            cars: cars,
+            fuelPrices: fuelPrices,
             weatherContext: weatherContext,
           );
 
@@ -97,7 +97,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
-  Future<String> _loadWeatherContext(List<TaskModel> tasks) async {
+  Future<String> _loadWeatherContext(List<TripModel> trips) async {
     try {
       final current = await ref.read(weatherProvider.future);
       final forecast = await ref.read(forecastWeatherProvider.future);
@@ -111,50 +111,27 @@ class ChatNotifier extends StateNotifier<ChatState> {
       buffer.writeln('- Tốc độ gió: ${current.windSpeed.toStringAsFixed(1)} m/s');
       buffer.writeln();
 
-      final upcomingTasks = tasks.where((task) => !task.isDone).toList()
-        ..sort((a, b) {
-          final aTime = _targetWeatherTime(a);
-          final bTime = _targetWeatherTime(b);
-          return aTime.compareTo(bTime);
-        });
+      final upcomingTrips = trips.where((trip) => trip.status != 'cancelled' && trip.status != 'completed').toList()
+        ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
-      if (upcomingTasks.isEmpty) {
-        buffer.writeln('Dự báo theo lịch: Người dùng chưa có task sắp tới.');
+      if (upcomingTrips.isEmpty) {
+        buffer.writeln('Dự báo theo lịch: Chưa có chuyến xe sắp tới.');
         return buffer.toString();
       }
 
-      buffer.writeln('Dự báo thời tiết gần giờ các task sắp tới:');
+      buffer.writeln('Dự báo thời tiết gần giờ các chuyến xe sắp tới:');
 
-      for (final task in upcomingTasks.take(8)) {
-        final targetTime = _targetWeatherTime(task);
+      for (final trip in upcomingTrips.take(5)) {
+        final targetTime = trip.startTime;
         final nearest = forecast.nearestTo(targetTime);
 
         if (nearest == null) continue;
 
-        buffer.writeln('- Task: ${task.title}');
-        buffer.writeln('  Loại: ${task.isLocationTask ? 'Có di chuyển' : 'Thông thường'}');
-
-        if (task.isLocationTask) {
-          if (task.startTime != null) {
-            buffer.writeln('  Giờ bắt đầu lịch: ${_formatDateTime(task.startTime!)}');
-          }
-
-          final departureTime = task.departureTime;
-          if (departureTime != null) {
-            buffer.writeln('  Giờ nên xuất phát: ${_formatDateTime(departureTime)}');
-          }
-
-          buffer.writeln('  Thời gian di chuyển dự kiến: ${task.travelMinutes} phút');
-
-          if (task.locationName != null && task.locationName!.trim().isNotEmpty) {
-            buffer.writeln('  Địa điểm: ${task.locationName!.trim()}');
-          }
-        } else {
-          buffer.writeln('  Deadline: ${_formatDateTime(task.deadline)}');
-        }
-
-        buffer.writeln('  Mốc dự báo gần nhất: ${_formatDateTime(nearest.time)}');
-        buffer.writeln('  Dự báo: ${nearest.description}, ${nearest.temperature.toStringAsFixed(1)}°C, độ ẩm ${nearest.humidity}%, gió ${nearest.windSpeed.toStringAsFixed(1)} m/s');
+        buffer.writeln('- Khách: ${trip.customerName}');
+        buffer.writeln('  Giờ đón: ${_formatDateTime(trip.startTime)}');
+        buffer.writeln('  Lộ trình: ${trip.pickupLocation} -> ${trip.destination}');
+        buffer.writeln('  Mốc thời tiết dự báo: ${_formatDateTime(nearest.time)}');
+        buffer.writeln('  Dự báo: ${nearest.description}, ${nearest.temperature.toStringAsFixed(1)}°C');
         buffer.writeln();
       }
 
@@ -162,14 +139,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (e) {
       return 'Không lấy được dữ liệu thời tiết/dự báo từ OpenWeatherMap. Lỗi: $e';
     }
-  }
-
-  DateTime _targetWeatherTime(TaskModel task) {
-    if (task.isLocationTask) {
-      return task.departureTime ?? task.startTime ?? task.deadline;
-    }
-
-    return task.deadline;
   }
 
   String _formatDateTime(DateTime value) {

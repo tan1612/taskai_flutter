@@ -1,20 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:taskai/data/repositories/cloud_task_repository.dart';
-import 'package:taskai/data/repositories/cloud_timetable_repository.dart';
 import 'package:taskai/data/repositories/gemini_repository.dart';
-import 'package:taskai/data/repositories/task_repository.dart';
-import 'package:taskai/data/repositories/timetable_repository.dart';
 import 'package:taskai/data/repositories/weather_repository.dart';
 import 'package:taskai/data/services/api_service.dart';
 import 'package:taskai/data/services/hive_service.dart';
 import 'package:taskai/data/services/notification_service.dart';
 
+// Đăng ký các import repository du lịch mới
+import 'package:taskai/data/repositories/trip_repository.dart';
+import 'package:taskai/data/repositories/cloud_trip_repository.dart';
+import 'package:taskai/data/repositories/car_repository.dart';
+import 'package:taskai/data/repositories/cloud_car_repository.dart';
+import 'package:taskai/data/repositories/fuel_price_repository.dart';
+
 // Export để các file khác chỉ cần import app_providers.dart là dùng được hết
-export 'package:taskai/presentation/providers/task_provider.dart';
 export 'package:taskai/presentation/providers/weather_provider.dart';
-export 'package:taskai/presentation/providers/timetable_provider.dart';
+
+// Export các provider du lịch mới
+export 'package:taskai/presentation/providers/trip_provider.dart';
+export 'package:taskai/presentation/providers/car_provider.dart';
+export 'package:taskai/presentation/providers/fuel_provider.dart';
 
 final hiveServiceProvider = Provider<HiveService>((ref) => HiveService());
 
@@ -28,22 +34,28 @@ final firestoreProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
 });
 
-final taskRepositoryProvider = Provider<TaskRepository>((ref) {
+// Các repository du lịch mới
+final tripRepositoryProvider = Provider<TripRepository>((ref) {
   final hive = ref.watch(hiveServiceProvider);
-  return TaskRepository(hive.taskBox);
+  return TripRepository(hive.tripBox);
 });
 
-final cloudTaskRepositoryProvider = Provider<CloudTaskRepository>((ref) {
-  return CloudTaskRepository(ref.watch(firestoreProvider));
+final cloudTripRepositoryProvider = Provider<CloudTripRepository>((ref) {
+  return CloudTripRepository(ref.watch(firestoreProvider));
 });
 
-final timetableRepositoryProvider = Provider<TimetableRepository>((ref) {
+final carRepositoryProvider = Provider<CarRepository>((ref) {
   final hive = ref.watch(hiveServiceProvider);
-  return TimetableRepository(hive.timetableBox);
+  return CarRepository(hive.carBox);
 });
 
-final cloudTimetableRepositoryProvider = Provider<CloudTimetableRepository>((ref) {
-  return CloudTimetableRepository(ref.watch(firestoreProvider));
+final cloudCarRepositoryProvider = Provider<CloudCarRepository>((ref) {
+  return CloudCarRepository(ref.watch(firestoreProvider));
+});
+
+final fuelPriceRepositoryProvider = Provider<FuelPriceRepository>((ref) {
+  final hive = ref.watch(hiveServiceProvider);
+  return FuelPriceRepository(hive.fuelPriceBox);
 });
 
 final weatherRepositoryProvider = Provider<WeatherRepository>((ref) {

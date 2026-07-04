@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:taskai/core/theme/app_theme.dart';
 import 'package:taskai/presentation/providers/auth_provider.dart';
-import 'package:taskai/presentation/providers/task_provider.dart';
+import 'package:taskai/presentation/providers/app_providers.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -10,14 +10,14 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authNotifierProvider);
-    final tasks = ref.watch(taskProvider);
+    final trips = ref.watch(tripProvider);
     final scheme = Theme.of(context).colorScheme;
 
     final user = authState.user;
 
-    final syncedCount = tasks.where((t) => t.syncStatus == 'synced').length;
-    final syncingCount = tasks.where((t) => t.syncStatus == 'syncing').length;
-    final failedCount = tasks.where((t) => t.syncStatus == 'failed').length;
+    final syncedCount = trips.where((t) => t.syncStatus == 'synced').length;
+    final syncingCount = trips.where((t) => t.syncStatus == 'syncing').length;
+    final failedCount = trips.where((t) => t.syncStatus == 'failed').length;
 
     return Scaffold(
       appBar: AppBar(
@@ -52,7 +52,7 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  user != null ? 'User ID: ${user.uid}' : 'Các task sẽ chỉ lưu offline trên thiết bị',
+                  user != null ? 'User ID: ${user.uid}' : 'Các chuyến xe sẽ chỉ lưu offline trên thiết bị',
                   style: TextStyle(
                     fontSize: 13,
                     color: scheme.onSurface.withOpacity(0.55),
@@ -82,7 +82,7 @@ class ProfileScreen extends ConsumerWidget {
                     _buildSyncRow(
                       context,
                       Icons.cloud_done_rounded,
-                      'Đã đồng bộ',
+                      'Đã đồng bộ chuyến đi',
                       '$syncedCount',
                       AppTheme.success,
                     ),

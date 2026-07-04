@@ -1,37 +1,37 @@
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:taskai/core/constants/app_constants.dart';
-import 'package:taskai/data/models/task_model.dart';
-import 'package:taskai/data/models/timetable_slot.dart';
+import 'package:taskai/data/models/trip_model.dart';
+import 'package:taskai/data/models/car_model.dart';
+import 'package:taskai/data/models/fuel_price_model.dart';
 
 class HiveService {
   static Future<void> init() async {
     await Hive.initFlutter();
 
-    if (!Hive.isAdapterRegistered(0)) {
-      Hive.registerAdapter(TaskModelAdapter());
+    // Đăng ký các adapter mới cho Du Lịch Năm Ái
+    if (!Hive.isAdapterRegistered(6)) {
+      Hive.registerAdapter(TripModelAdapter());
+    }
+    if (!Hive.isAdapterRegistered(4)) {
+      Hive.registerAdapter(CarModelAdapter());
+    }
+    if (!Hive.isAdapterRegistered(5)) {
+      Hive.registerAdapter(FuelPriceModelAdapter());
     }
 
-    if (!Hive.isAdapterRegistered(1)) {
-      Hive.registerAdapter(TaskPriorityAdapter());
-    }
-
-    // BẮT BUỘC: đăng ký adapter cho TaskType
-    if (!Hive.isAdapterRegistered(2)) {
-      Hive.registerAdapter(TaskTypeAdapter());
-    }
-
-    if (!Hive.isAdapterRegistered(3)) {
-      Hive.registerAdapter(TimetableSlotAdapter());
-    }
-
-    await Hive.openBox<TaskModel>(AppConstants.taskBox);
+    // Mở settings box lưu cài đặt hệ thống (dark mode, thông báo)
     await Hive.openBox<dynamic>(AppConstants.settingsBox);
-    await Hive.openBox<TimetableSlot>(AppConstants.timetableBox);
-  }
 
-  Box<TaskModel> get taskBox => Hive.box<TaskModel>(AppConstants.taskBox);
+    // Mở các box mới du lịch
+    await Hive.openBox<TripModel>(AppConstants.tripBox);
+    await Hive.openBox<CarModel>(AppConstants.carBox);
+    await Hive.openBox<FuelPriceModel>(AppConstants.fuelPriceBox);
+  }
 
   Box<dynamic> get settingsBox => Hive.box<dynamic>(AppConstants.settingsBox);
 
-  Box<TimetableSlot> get timetableBox => Hive.box<TimetableSlot>(AppConstants.timetableBox);
+  // Getters cho các box mới du lịch
+  Box<TripModel> get tripBox => Hive.box<TripModel>(AppConstants.tripBox);
+  Box<CarModel> get carBox => Hive.box<CarModel>(AppConstants.carBox);
+  Box<FuelPriceModel> get fuelPriceBox => Hive.box<FuelPriceModel>(AppConstants.fuelPriceBox);
 }
