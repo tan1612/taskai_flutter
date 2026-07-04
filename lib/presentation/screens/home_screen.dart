@@ -89,15 +89,20 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(weatherProvider);
-          ref.invalidate(forecastWeatherProvider);
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          FocusManager.instance.primaryFocus?.unfocus();
         },
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            // Banner chào mừng và doanh thu dự kiến
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(weatherProvider);
+            ref.invalidate(forecastWeatherProvider);
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // Banner chào mừng và doanh thu dự kiến
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -334,6 +339,7 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 80), // Chừa khoảng trống cho FAB
           ],
         ),
+      ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'home_create_trip',
@@ -720,47 +726,62 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
               'Số lượng khách đi hôm nay (90k/khách):',
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.grey),
             ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
               children: [
-                _buildCounterItem('Sáng - Vào', _morningIn, (val) => setState(() => _morningIn = val), scheme),
-                _buildCounterItem('Sáng - Ra', _morningOut, (val) => setState(() => _morningOut = val), scheme),
-                _buildCounterItem('Chiều - Vào', _afternoonIn, (val) => setState(() => _afternoonIn = val), scheme),
-                _buildCounterItem('Chiều - Ra', _afternoonOut, (val) => setState(() => _afternoonOut = val), scheme),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCounterItemTile('Sáng - Vào', _morningIn, (val) => setState(() => _morningIn = val), scheme),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildCounterItemTile('Sáng - Ra', _morningOut, (val) => setState(() => _morningOut = val), scheme),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCounterItemTile('Chiều - Vào', _afternoonIn, (val) => setState(() => _afternoonIn = val), scheme),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildCounterItemTile('Chiều - Ra', _afternoonOut, (val) => setState(() => _afternoonOut = val), scheme),
+                    ),
+                  ],
+                ),
               ],
             ),
             const Divider(height: 32),
 
             // Nhập Vốn & Tiền dầu đổ thực tế
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _capitalController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Vốn bỏ ra hôm nay',
-                      suffixText: 'đ',
-                      isDense: true,
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextField(
-                    controller: _fuelController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Tiền dầu đổ hôm nay',
-                      suffixText: 'đ',
-                      isDense: true,
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                  ),
-                ),
-              ],
+            TextField(
+              controller: _capitalController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Mức vốn bỏ ra hôm nay',
+                labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                suffixText: 'đ',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                prefixIcon: Icon(Icons.account_balance_wallet_rounded, size: 20, color: scheme.primary),
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _fuelController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Tiền đổ dầu thực tế',
+                labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                suffixText: 'đ',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                prefixIcon: Icon(Icons.local_gas_station_rounded, size: 20, color: scheme.primary),
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
             ),
             const SizedBox(height: 16),
 
@@ -862,41 +883,52 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
     );
   }
 
-  Widget _buildCounterItem(String label, int value, ValueChanged<int> onChanged, ColorScheme scheme) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.grey),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.remove_circle_outline, size: 18),
-              onPressed: value > 0 ? () => onChanged(value - 1) : null,
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
+  Widget _buildCounterItemTile(String label, int value, ValueChanged<int> onChanged, ColorScheme scheme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: scheme.primary.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.outlineVariant.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+              color: scheme.onSurfaceVariant.withOpacity(0.8),
             ),
-            SizedBox(
-              width: 16,
-              child: Center(
-                child: Text(
-                  '$value',
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
-                ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline, size: 20),
+                onPressed: value > 0 ? () => onChanged(value - 1) : null,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.add_circle_outline, size: 18),
-              onPressed: () => onChanged(value + 1),
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-            ),
-          ],
-        ),
-      ],
+              const SizedBox(width: 8),
+              Text(
+                '$value',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.add_circle_outline, size: 20),
+                onPressed: () => onChanged(value + 1),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
