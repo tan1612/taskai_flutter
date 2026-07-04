@@ -553,6 +553,7 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
   DateTime _selectedDate = DateTime.now();
   final _capitalController = TextEditingController();
   final _fuelController = TextEditingController();
+  final _revenueController = TextEditingController();
 
   int _morningIn = 0;
   int _morningOut = 0;
@@ -566,6 +567,7 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
   void dispose() {
     _capitalController.dispose();
     _fuelController.dispose();
+    _revenueController.dispose();
     super.dispose();
   }
 
@@ -581,6 +583,7 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
       _afternoonOut = log.passengerCountAfternoonOut;
       _capitalController.text = log.capital.toStringAsFixed(0);
       _fuelController.text = log.actualFuelCost.toStringAsFixed(0);
+      _revenueController.text = log.actualRevenue.toStringAsFixed(0);
     } else {
       _morningIn = 0;
       _morningOut = 0;
@@ -588,6 +591,7 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
       _afternoonOut = 0;
       _capitalController.text = '0';
       _fuelController.text = '0';
+      _revenueController.text = '0';
     }
   }
 
@@ -619,31 +623,18 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
 
     // Tính toán tài chính hôm nay
     final double routeRevToday = (_morningIn + _morningOut + _afternoonIn + _afternoonOut) * 90000.0;
-    final today16SeaterTrips = trips.where((t) =>
-        t.carType == '16_seater' &&
-        t.status != 'cancelled' &&
-        t.startTime.year == _selectedDate.year &&
-        t.startTime.month == _selectedDate.month &&
-        t.startTime.day == _selectedDate.day).toList();
-    final double tourRevToday = today16SeaterTrips.fold(0.0, (sum, t) => sum + t.finalPrice);
-    final double tourCostToday = today16SeaterTrips.fold(0.0, (sum, t) => sum + t.tollFee + t.driverFee + t.otherFee);
+    final double actualRevToday = double.tryParse(_revenueController.text) ?? 0.0;
     final double fuelToday = double.tryParse(_fuelController.text) ?? 0.0;
     final double capitalToday = double.tryParse(_capitalController.text) ?? 0.0;
-    final double profitToday = (routeRevToday + tourRevToday) - fuelToday - tourCostToday - capitalToday;
+    final double profitToday = actualRevToday - fuelToday - capitalToday;
 
     // Tính toán tài chính tháng này
     final monthLogs = dailyLogs.where((l) => l.date.year == _selectedDate.year && l.date.month == _selectedDate.month).toList();
-    final monthTrips = trips.where((t) =>
-        t.carType == '16_seater' &&
-        t.status != 'cancelled' &&
-        t.startTime.year == _selectedDate.year &&
-        t.startTime.month == _selectedDate.month).toList();
     final double routeRevMonth = monthLogs.fold(0.0, (sum, l) => sum + l.routeRevenue);
-    final double tourRevMonth = monthTrips.fold(0.0, (sum, t) => sum + t.finalPrice);
+    final double actualRevMonth = monthLogs.fold(0.0, (sum, l) => sum + l.actualRevenue);
     final double fuelMonth = monthLogs.fold(0.0, (sum, l) => sum + l.actualFuelCost);
     final double capitalMonth = monthLogs.fold(0.0, (sum, l) => sum + l.capital);
-    final double tourCostMonth = monthTrips.fold(0.0, (sum, t) => sum + t.tollFee + t.driverFee + t.otherFee);
-    final double profitMonth = (routeRevMonth + tourRevMonth) - fuelMonth - tourCostMonth - capitalMonth;
+    final double profitMonth = actualRevMonth - fuelMonth - capitalMonth;
 
     return Card(
       elevation: 0,
@@ -783,6 +774,20 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
               ),
               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _revenueController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Tổng thu thực tế hôm nay',
+                labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                suffixText: 'đ',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                prefixIcon: Icon(Icons.monetization_on_rounded, size: 20, color: Colors.green),
+              ),
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.green),
+            ),
             const SizedBox(height: 16),
 
             // Nút lưu nhật ký ngày
@@ -792,6 +797,7 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
                 onPressed: () async {
                   final capital = double.tryParse(_capitalController.text) ?? 0.0;
                   final fuel = double.tryParse(_fuelController.text) ?? 0.0;
+                  final revenue = double.tryParse(_revenueController.text) ?? 0.0;
                   await ref.read(dailyLogProvider.notifier).saveDailyLog(
                         dateStr: dateStr,
                         morningIn: _morningIn,
@@ -800,6 +806,7 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
                         afternoonOut: _afternoonOut,
                         capital: capital,
                         actualFuelCost: fuel,
+                        actualRevenue: revenue,
                       );
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -832,14 +839,21 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.blueGrey),
                       ),
                       const SizedBox(height: 6),
-                      _buildReportRow('Tuyến hàng ngày:', currencyFormat.format(routeRevToday), scheme),
-                      _buildReportRow('Hợp đồng Tour:', currencyFormat.format(tourRevToday), scheme),
+                      _buildReportRow('Tuyến chạy (ước tính):', currencyFormat.format(routeRevToday), scheme),
+                      const Divider(height: 6),
+                      _buildReportRow(
+                        'Tổng thu thực tế:',
+                        currencyFormat.format(actualRevToday),
+                        scheme,
+                        isBold: true,
+                        valueColor: Colors.green,
+                      ),
+                      const Divider(height: 6),
                       _buildReportRow('Dầu thực tế:', '-${currencyFormat.format(fuelToday)}', scheme, valueColor: Colors.redAccent),
-                      _buildReportRow('Chi phí Tour:', '-${currencyFormat.format(tourCostToday)}', scheme, valueColor: Colors.redAccent),
                       _buildReportRow('Vốn bỏ ra:', '-${currencyFormat.format(capitalToday)}', scheme, valueColor: Colors.redAccent),
                       const Divider(height: 12),
                       _buildReportRow(
-                        'Lợi nhuận ròng:',
+                        'Lợi nhuận thực tế:',
                         currencyFormat.format(profitToday),
                         scheme,
                         isBold: true,
@@ -859,14 +873,21 @@ class _DailyRoutePanelState extends ConsumerState<DailyRoutePanel> {
                         style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.blueGrey),
                       ),
                       const SizedBox(height: 6),
-                      _buildReportRow('Doanh thu tuyến:', currencyFormat.format(routeRevMonth), scheme),
-                      _buildReportRow('Doanh thu Tour:', currencyFormat.format(tourRevMonth), scheme),
+                      _buildReportRow('Tuyến chạy (ước tính):', currencyFormat.format(routeRevMonth), scheme),
+                      const Divider(height: 6),
+                      _buildReportRow(
+                        'Tổng thu thực tế:',
+                        currencyFormat.format(actualRevMonth),
+                        scheme,
+                        isBold: true,
+                        valueColor: Colors.green,
+                      ),
+                      const Divider(height: 6),
                       _buildReportRow('Tổng tiền dầu:', '-${currencyFormat.format(fuelMonth)}', scheme, valueColor: Colors.redAccent),
-                      _buildReportRow('Tổng phí Tour:', '-${currencyFormat.format(tourCostMonth)}', scheme, valueColor: Colors.redAccent),
                       _buildReportRow('Tổng vốn:', '-${currencyFormat.format(capitalMonth)}', scheme, valueColor: Colors.redAccent),
                       const Divider(height: 12),
                       _buildReportRow(
-                        'Tổng lợi nhuận:',
+                        'Lợi nhuận thực tế:',
                         currencyFormat.format(profitMonth),
                         scheme,
                         isBold: true,

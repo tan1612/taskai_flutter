@@ -56,6 +56,7 @@ class DailyLogNotifier extends StateNotifier<List<DailyLogModel>> {
         a.passengerCountAfternoonOut != b.passengerCountAfternoonOut ||
         a.capital != b.capital ||
         a.actualFuelCost != b.actualFuelCost ||
+        a.actualRevenue != b.actualRevenue ||
         a.userId != b.userId;
   }
 
@@ -75,6 +76,7 @@ class DailyLogNotifier extends StateNotifier<List<DailyLogModel>> {
     required int afternoonOut,
     required double capital,
     required double actualFuelCost,
+    required double actualRevenue,
   }) async {
     final date = DateTime.parse(dateStr);
     final authState = ref.read(authNotifierProvider);
@@ -89,6 +91,7 @@ class DailyLogNotifier extends StateNotifier<List<DailyLogModel>> {
       passengerCountAfternoonOut: afternoonOut,
       capital: capital,
       actualFuelCost: actualFuelCost,
+      actualRevenue: actualRevenue,
       syncStatus: user != null ? 'syncing' : 'synced',
       userId: user?.uid,
     );

@@ -9,6 +9,7 @@ class DailyLogModel extends HiveObject {
   final int passengerCountAfternoonOut;
   final double capital; // Mức vốn bỏ ra hôm đó
   final double actualFuelCost; // Số tiền dầu đổ hôm đó
+  final double actualRevenue; // Tổng thu thực tế hôm đó (tự nhập)
   final String? syncStatus; // 'synced' | 'syncing' | 'failed'
   final String? userId;
 
@@ -21,6 +22,7 @@ class DailyLogModel extends HiveObject {
     this.passengerCountAfternoonOut = 0,
     this.capital = 0.0,
     this.actualFuelCost = 0.0,
+    this.actualRevenue = 0.0,
     this.syncStatus = 'synced',
     this.userId,
   });
@@ -42,6 +44,7 @@ class DailyLogModel extends HiveObject {
     int? passengerCountAfternoonOut,
     double? capital,
     double? actualFuelCost,
+    double? actualRevenue,
     String? syncStatus,
     String? userId,
   }) {
@@ -54,6 +57,7 @@ class DailyLogModel extends HiveObject {
       passengerCountAfternoonOut: passengerCountAfternoonOut ?? this.passengerCountAfternoonOut,
       capital: capital ?? this.capital,
       actualFuelCost: actualFuelCost ?? this.actualFuelCost,
+      actualRevenue: actualRevenue ?? this.actualRevenue,
       syncStatus: syncStatus ?? this.syncStatus,
       userId: userId ?? this.userId,
     );
@@ -69,6 +73,7 @@ class DailyLogModel extends HiveObject {
       'passengerCountAfternoonOut': passengerCountAfternoonOut,
       'capital': capital,
       'actualFuelCost': actualFuelCost,
+      'actualRevenue': actualRevenue,
       'userId': userId,
     };
   }
@@ -83,6 +88,7 @@ class DailyLogModel extends HiveObject {
       passengerCountAfternoonOut: map['passengerCountAfternoonOut'] as int? ?? 0,
       capital: (map['capital'] as num?)?.toDouble() ?? 0.0,
       actualFuelCost: (map['actualFuelCost'] as num?)?.toDouble() ?? 0.0,
+      actualRevenue: (map['actualRevenue'] as num?)?.toDouble() ?? 0.0,
       syncStatus: 'synced',
       userId: map['userId'] as String?,
     );
@@ -108,6 +114,7 @@ class DailyLogModelAdapter extends TypeAdapter<DailyLogModel> {
       passengerCountAfternoonOut: fields[5] as int? ?? 0,
       capital: (fields[6] as num?)?.toDouble() ?? 0.0,
       actualFuelCost: (fields[7] as num?)?.toDouble() ?? 0.0,
+      actualRevenue: (fields[10] as num?)?.toDouble() ?? 0.0,
       syncStatus: fields[8] as String? ?? 'synced',
       userId: fields[9] as String?,
     );
@@ -116,7 +123,7 @@ class DailyLogModelAdapter extends TypeAdapter<DailyLogModel> {
   @override
   void write(BinaryWriter writer, DailyLogModel obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(11)
       ..writeByte(0)..write(obj.id)
       ..writeByte(1)..write(obj.date)
       ..writeByte(2)..write(obj.passengerCountMorningIn)
@@ -126,6 +133,7 @@ class DailyLogModelAdapter extends TypeAdapter<DailyLogModel> {
       ..writeByte(6)..write(obj.capital)
       ..writeByte(7)..write(obj.actualFuelCost)
       ..writeByte(8)..write(obj.syncStatus)
-      ..writeByte(9)..write(obj.userId);
+      ..writeByte(9)..write(obj.userId)
+      ..writeByte(10)..write(obj.actualRevenue);
   }
 }
