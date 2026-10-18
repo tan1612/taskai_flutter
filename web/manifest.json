@@ -1,11 +1,11 @@
 {
-    "name": "taskai",
-    "short_name": "taskai",
+    "name": "Du Lịch Năm Ái",
+    "short_name": "Du Lịch Năm Ái",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Hệ thống quản lý đặt xe du lịch và điều phối lộ trình - Du Lịch Năm Ái",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

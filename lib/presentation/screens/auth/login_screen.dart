@@ -70,13 +70,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 // Icon / Logo
                 Icon(
-                  Icons.smart_toy_rounded,
+                  Icons.directions_car_filled_rounded,
                   size: 80,
                   color: AppTheme.primary,
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'TaskAI Pro',
+                  'Du Lịch Năm Ái',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 32,
@@ -86,7 +86,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Trợ lý học tập và di chuyển thông minh cho sinh viên',
+                  'Hệ thống quản lý đặt xe du lịch và điều phối lộ trình thông minh',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,

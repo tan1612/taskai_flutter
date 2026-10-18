@@ -131,7 +131,7 @@ class SettingsScreen extends ConsumerWidget {
                 'Notification',
                 style: TextStyle(fontWeight: FontWeight.w800),
               ),
-              subtitle: const Text('Bật/tắt nhắc deadline'),
+              subtitle: const Text('Bật/tắt nhắc lịch khởi hành chuyến xe'),
               secondary: const Icon(Icons.notifications_active_rounded),
             ),
           ),

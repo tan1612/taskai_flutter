@@ -87,7 +87,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Đăng ký để đồng bộ lịch và công việc lên Cloud mọi lúc mọi nơi.',
+                  'Đăng ký để đồng bộ lịch trình và dữ liệu nhà xe lên Cloud mọi lúc mọi nơi.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
